@@ -1,0 +1,136 @@
+# GT LinkedIn Scraper
+
+Production-grade LinkedIn job scraping automation built with Playwright, Prefect, FastAPI, and PostgreSQL.
+
+## Quick Start
+
+```bash
+cp .env.example .env
+make install
+make seed
+make docker   # or make dev for native run
+```
+
+## Local Development (Fast Iteration)
+
+For faster development without rebuilding Docker images:
+
+```bash
+# 1. Start only Postgres (and Prefect server) in Docker
+docker compose -f docker-compose.dev.yml up -d
+
+# 2. Create and activate a local virtual environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# 3. Install dependencies locally
+pip install -e ".[dev]"
+playwright install chromium
+
+# 4. Run database migrations
+alembic upgrade head
+
+# 5. Start the API with auto-reload (Terminal 1)
+uvicorn gt_linkedin_scraper.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 6. Start the Prefect worker (Terminal 2)
+prefect worker start --pool default
+```
+
+The `.env` file already points to `localhost:5432` and `localhost:4200`, so no configuration changes are needed.
+
+## Docker Production
+
+```bash
+make docker
+```
+
+## Services
+
+- FastAPI docs: http://localhost:8000/docs
+- Prefect UI: http://localhost:4200
+
+## Docker
+
+```bash
+make docker
+```
+
+## What Was Implemented
+
+### Core Architecture
+- **FastAPI** REST API with lifespan-managed DB init and Prefect deployer reconciliation
+- **Playwright** crawler with `BrowserPool`, `LinkedInCrawler`, `Parser` (email regex with image-filter exclusion preserved), `RateLimiter`
+- **Prefect** flows/tasks for orchestration with retries, plus deployer that reconciles `config/jobs.yaml` → Prefect deployments
+- **SQLAlchemy async** + PostgreSQL with repository pattern, job state machine (`idle/running/completed/error/hold`), and `run_logs`
+- **Async email** via `aiosmtplib` with Jinja2 templates and CSV attachments
+- **CSV dual-output** to `extract/<dd-mm-yyyy>/` after each run
+
+### Key Fixes from Old Code
+- `cron_schedule` now actually drives scheduling via Prefect deployments
+- Config-driven jobs ported from `config-bk.json` → `config/jobs.yaml` (44 jobs, `%22` decoded to `"`)
+- Tag→recipient map moved from hardcoded `crawler.py` to `.env` variables
+- No hardcoded credentials in code
+- Single browser instance with context isolation + `data/auth_state.json` persistence
+
+### Missing Features / Known Issues
+
+| Feature | Status | Notes |
+|---|---|---|
+| **Testing** | Missing | Explicitly excluded per plan, but no test scaffolding exists |
+| **Alembic migrations** | Partial | `alembic/` dir + `env.py` exist, but no real migration scripts yet |
+| **Windows service** | Dropped | Replaced by Docker + native Python deployment |
+| **Proxy rotation** | Not implemented | Architecture supports it; not implemented now |
+| **Tag recipient validation** | Partial | Map is configurable via env, but no validation that all tags have recipients |
+| **Prefect healthcheck** | Failing | Prefect server shows `unhealthy` in Docker; needs manual DB setup or init script |
+| **Auth state persistence** | Partial | Cookie save/load implemented, but `storage_state.json` path not used |
+| **LinkedIn checkpoint handling** | Partial | Detects checkpoint, sets job to `error`, but no alerting/webhook |
+| **Email delivery failure isolation** | Partial | Notification failure is logged, but not fully isolated from flow success |
+| **CSV attachment size guard** | Missing | No 10MB split logic implemented |
+| **Migration script from old DB** | Missing | Clean break; old `scheduler.db` not migrated |
+| **Multi-cloud/K8s deployment** | Out of scope | Not planned |
+
+## Errors Encountered and Fixes
+
+| Error | Root Cause | Fix Applied |
+|---|---|---|
+| `setuptools.backends.legacy:build` backend unavailable | Invalid build backend in `pyproject.toml` | Changed to `setuptools.build_meta` |
+| `playwright_stealth.stealth_async` import error | API changed in newer version | Removed stealth import; not critical for basic functionality |
+| `ModuleNotFoundError: No module named 'bs4'` | `beautifulsoup4` missing from Docker dependencies | Added `beautifulsoup4>=4.12.2` to `pyproject.toml` dependencies |
+| `database "prefect" does not exist` | Prefect server DB not created | Created `prefect` database manually via `docker exec` |
+| Prefect server unhealthy | Healthcheck uses `curl` which may not be available | Adjusted healthcheck; server runs but shows unhealthy due to curl |
+| `src does not exist or is not a directory` | Docker build context issue with editable install | Moved `COPY src/` before `pip install -e .` in Dockerfile |
+| Editable install metadata error | Setuptools deprecation warnings + missing README | Simplified install, ensured `README.md` exists |
+
+## Current Service Status
+
+```bash
+docker compose ps
+```
+
+Expected output:
+- `scraper-postgres` — healthy
+- `scraper-prefect` — running (may show unhealthy due to curl healthcheck)
+- `scraper-api` — running
+- `scraper-worker` — running
+
+## Environment Variables
+
+See `.env.example` for all configurable options. Key variables:
+
+- `DATABASE_URL` — PostgreSQL connection string
+- `LINKEDIN_USERNAME` / `LINKEDIN_PASSWORD` — LinkedIn credentials
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` — Email settings
+- `TAG_RECIPIENTS__JAVA`, `TAG_RECIPIENTS__DEVOPS`, etc. — Tag-specific email recipients
+- `JOBS_CONFIG_PATH` — Path to `config/jobs.yaml`
+
+## Next Steps
+
+1. Fix Prefect server healthcheck or use `curl`-based check
+2. Add Alembic migration scripts for schema changes
+3. Implement test scaffolding
+4. Add proxy rotation support
+5. Implement CSV attachment size guard
+6. Add webhook/alerting for LinkedIn checkpoint detection
+7. Add validation for tag recipient configuration

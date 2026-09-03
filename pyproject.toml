@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gt-linkedin-scraper"
+version = "0.1.0"
+description = "Production-grade LinkedIn job scraper with Playwright, Prefect, and FastAPI"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Gaurav Talele", email = "epostgauravtalele@gmail.com"}
+]
+keywords = ["linkedin", "scraper", "prefect", "fastapi", "playwright"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "prefect>=3.0.0",
+    "playwright>=1.40.0",
+    "playwright-stealth>=1.0.6",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "structlog>=23.2.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.23",
+    "alembic>=1.12.0",
+    "jinja2>=3.1.2",
+    "aiosmtplib>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.2.3",
+    "pyyaml>=6.0.1",
+    "psycopg2-binary>=2.9.9",
+    "beautifulsoup4>=4.12.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.6",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"gt_linkedin_scraper" = ["py.typed"]
+"gt_linkedin_scraper.notifier" = ["templates/*.j2"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic"]

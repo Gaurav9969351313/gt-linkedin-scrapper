@@ -1,0 +1,68 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run API (FastAPI)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/Scripts/uvicorn.exe",
+      "args": [
+        "gt_linkedin_scraper.api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload"
+      ],
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Run Job Directly",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_job_directly.py",
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Run Worker",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/start_worker.py",
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Debug LinkedIn Login",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/debug_test2.py",
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Seed Jobs",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/seed_jobs.py",
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    }
+  ]
+}
