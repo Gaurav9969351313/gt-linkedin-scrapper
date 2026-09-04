@@ -1,4 +1,4 @@
-.PHONY: install prefect-server worker api dev dev-docker seed docker clean
+.PHONY: install prefect-server worker api dev dev-docker seed docker clean add-candidate
 
 install:
 	pip install -e ".[dev]"
@@ -24,6 +24,9 @@ dev-docker:
 seed:
 	alembic upgrade head
 	python scripts/seed_jobs.py
+
+add-candidate:
+	python frontend/add_candidate.py $(filter-out $@,$(MAKECMDGOALS))
 
 docker:
 	docker compose up --build
