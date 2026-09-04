@@ -1,0 +1,49 @@
+# Git
+.git/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime data directories (mounted via docker-compose volumes)
+data/
+logs/
+extract/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker/Compose files (not needed in image)
+docker-compose*.yml
+
+# Development tooling
+Makefile
+AGENTS.md
+kilo.json
+query
+monitor_task.py
+run_job_directly.py
+.kilo/
+debug/

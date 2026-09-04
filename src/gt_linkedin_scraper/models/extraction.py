@@ -6,7 +6,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
@@ -24,7 +23,6 @@ class EmailRecord(Base):
     scraped_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("email", "job_id", name="uq_email_job"),
         Index("ix_email_records_job_id", "job_id"),
         Index("ix_email_records_scraped_at", "scraped_at"),
         Index("ix_email_records_tag", "tag"),

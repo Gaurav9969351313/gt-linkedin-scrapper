@@ -1,6 +1,8 @@
 import sys
+import asyncio
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 from gt_linkedin_scraper.core.config import settings
 
@@ -31,15 +33,21 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        settings.database_url,
         poolclass=pool.NullPool,
     )
-    with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-        with context.begin_transaction():
-            context.run_migrations()
+
+    async def do_run_migrations() -> None:
+        async with connectable.connect() as connection:
+            def run_sync_migrations(connection):
+                context.configure(connection=connection, target_metadata=target_metadata)
+                with context.begin_transaction():
+                    context.run_migrations()
+
+            await connection.run_sync(run_sync_migrations)
+
+    asyncio.run(do_run_migrations())
 
 
 if context.is_offline_mode():

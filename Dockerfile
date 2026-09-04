@@ -1,7 +1,11 @@
+# syntax=docker/dockerfile:1
+
 FROM python:3.12-slim
 
 # Install system dependencies for Playwright
-RUN apt-get update && apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     libnss3 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -22,17 +26,31 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy source code first for editable install
-COPY pyproject.toml .
+# Copy dependency manifest first to leverage Docker layer caching.
+# This layer is only invalidated when pyproject.toml changes.
+COPY pyproject.toml README.md ./
+
+# Install Python dependencies (cached via BuildKit cache mount).
+# Dependencies are resolved from pyproject.toml directly into a temp
+# requirements file so this layer is independent of source code changes.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir setuptools wheel && \
+    python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); open('/tmp/requirements.txt','w').write('\n'.join(d['project']['dependencies']))" && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy source code and install the package.
+# This layer is only invalidated when src/ changes (fast because deps are cached).
 COPY src/ ./src/
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir .
+
+# Install Playwright browsers (cached via BuildKit cache mount for downloads)
+RUN --mount=type=cache,target=/root/.cache/ms-playwright \
+    playwright install chromium
+
+# Copy application config and scripts (changes here won't invalidate the pip layers above)
 COPY config/ ./config/
 COPY scripts/ ./scripts/
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -e .
-
-# Install Playwright browsers
-RUN playwright install chromium
 
 # Create data directories
 RUN mkdir -p data logs extract
