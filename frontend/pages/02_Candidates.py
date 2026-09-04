@@ -55,6 +55,7 @@ def candidate_form(candidate=None):
         email = st.text_input("Email", value=candidate.email if candidate else "")
         email_password = st.text_input("Email Password", value=candidate.email_password if candidate else "", type="password")
         tag = st.selectbox("Tag", ALLOWED_TAGS, index=ALLOWED_TAGS.index(candidate.tag) if candidate and candidate.tag in ALLOWED_TAGS else 0)
+        email_subject = st.text_input("Email Subject", value=candidate.email_subject if candidate else "")
         resume_file = st.file_uploader("Resume", type=["pdf", "docx"])
         email_body = st.text_area("Email Body (HTML)", value=candidate.email_body if candidate else "", height=200)
         submitted = st.form_submit_button("Save")
@@ -67,6 +68,7 @@ def candidate_form(candidate=None):
                 "email": email,
                 "email_password": email_password,
                 "tag": tag,
+                "email_subject": email_subject,
                 "resume_file": resume_file,
                 "email_body": email_body,
             }
@@ -91,6 +93,7 @@ def render_candidates():
             st.write(f"**Subscription:** {candidate.subscription}")
             st.write(f"**Active:** {candidate.is_active}")
             st.write(f"**Email:** {candidate.email}")
+            st.write(f"**Email Subject:** {candidate.email_subject}")
             st.write(f"**Resume:** {candidate.resume}")
             st.write(f"**Email Body:** {candidate.email_body[:500]}...")
 
@@ -143,6 +146,7 @@ if edit_id:
                 candidate.email = form_data["email"]
                 candidate.email_password = form_data["email_password"]
                 candidate.tag = form_data["tag"]
+                candidate.email_subject = form_data["email_subject"]
                 if resume_path:
                     candidate.resume = resume_path
                 candidate.email_body = form_data["email_body"]
@@ -169,6 +173,7 @@ else:
                 email=form_data["email"],
                 email_password=form_data["email_password"],
                 tag=form_data["tag"],
+                email_subject=form_data["email_subject"],
                 resume=resume_path,
                 email_body=form_data["email_body"],
             )

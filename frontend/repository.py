@@ -39,6 +39,7 @@ def update_candidate(db: Session, candidate_id: int, candidate: Candidate) -> Op
     existing.email_password = candidate.email_password
     existing.resume = candidate.resume
     existing.email_body = candidate.email_body
+    existing.email_subject = candidate.email_subject
     existing.tag = candidate.tag
     db.commit()
     db.refresh(existing)

@@ -9,7 +9,7 @@ from gt_linkedin_scraper.core.config import settings
 from gt_linkedin_scraper.core.database import async_session_factory
 from gt_linkedin_scraper.models.enums import JobStatus, Tag
 from gt_linkedin_scraper.models.job import Job
-from gt_linkedin_scraper.scheduler.flows import scrape_single_flow
+from gt_linkedin_scraper.scheduler.flows import hr_email_dispatcher, scrape_single_flow
 from gt_linkedin_scraper.storage.repository import JobRepository
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,15 @@ async def _get_flow_id(client) -> str:
     if flows:
         return flows[0].id
     return await client.create_flow_from_name(scrape_single_flow.name)
+
+
+async def _get_email_flow_id(client) -> str:
+    flows = await client.read_flows(
+        flow_filter=FlowFilter(name=FlowFilterName(like_=hr_email_dispatcher.name))
+    )
+    if flows:
+        return flows[0].id
+    return await client.create_flow_from_name(hr_email_dispatcher.name)
 
 
 async def _ensure_deployment(job: Job, client, flow_id: str) -> None:
@@ -65,6 +74,43 @@ async def _ensure_deployment(job: Job, client, flow_id: str) -> None:
         logger.exception(
             "Failed to create deployment",
             extra={"job_id": job.id, "deployment_name": name},
+        )
+
+
+async def _ensure_email_dispatcher_deployment(client, flow_id: str) -> None:
+    name = "hr-email-dispatcher"
+    schedule = {"cron": "0 5 * * *", "timezone": "Asia/Kolkata"}
+
+    try:
+        deployment = await client.read_deployment_by_name(name)
+        if deployment:
+            await client.update_deployment(
+                deployment_id=deployment.id,
+                deployment={
+                    "schedules": [{"schedule": schedule}],
+                    "work_pool_name": "default",
+                },
+            )
+            logger.info("Updated email dispatcher deployment", extra={"deployment_name": name})
+            return
+    except Exception:
+        pass
+
+    try:
+        await client.create_deployment(
+            flow_id=flow_id,
+            name=name,
+            parameters={},
+            schedules=[{"schedule": schedule}],
+            tags=["email", "hr"],
+            entrypoint="gt_linkedin_scraper.scheduler.flows:hr_email_dispatcher",
+            work_pool_name="default",
+        )
+        logger.info("Created email dispatcher deployment", extra={"deployment_name": name})
+    except Exception:
+        logger.exception(
+            "Failed to create email dispatcher deployment",
+            extra={"deployment_name": name},
         )
 
 
@@ -121,6 +167,9 @@ async def _reconcile() -> None:
         flow_id = await _get_flow_id(client)
         for job in active_jobs:
             await _ensure_deployment(job, client, flow_id)
+
+        email_flow_id = await _get_email_flow_id(client)
+        await _ensure_email_dispatcher_deployment(client, email_flow_id)
 
     logger.info("Deployments reconciled", extra={"count": len(active_jobs)})
 

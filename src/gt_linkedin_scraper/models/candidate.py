@@ -16,6 +16,7 @@ class Candidate(Base):
     email_password = Column(String(256), nullable=False)
     resume = Column(String(512), nullable=True)
     email_body = Column(Text, nullable=False)
+    email_subject = Column(String(512), nullable=False)
     tag = Column(String(64), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=sql_func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=sql_func.now(), onupdate=sql_func.now(), nullable=False)

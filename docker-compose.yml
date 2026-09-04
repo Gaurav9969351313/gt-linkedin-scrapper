@@ -61,6 +61,7 @@ services:
       - ./logs:/app/logs
       - ./config:/app/config
       - ./extract:/app/extract
+      - ./ResumeUploads:/app/ResumeUploads
     depends_on:
       postgres:
         condition: service_healthy

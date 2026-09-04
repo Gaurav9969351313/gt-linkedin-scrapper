@@ -1,13 +1,13 @@
 import logging
-from pathlib import Path
-from typing import List, Optional
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+from pathlib import Path
 
 import aiosmtplib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from gt_linkedin_scraper.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class EmailNotifier:
         self.password = password
         self.sender = sender
 
-    def _get_recipients(self, tag: str) -> List[str]:
+    def _get_recipients(self, tag: str) -> list[str]:
         recipients = list(settings.tag_recipients_map.get(tag, []))
         default = [e.strip() for e in settings.tag_recipients__default.split(",") if e.strip()]
         for d in default:
@@ -68,18 +68,15 @@ class EmailNotifier:
         subject: str,
         html_body: str,
         text_body: str,
-        attachments: List[Path],
-        recipients: Optional[List[str]] = None,
+        attachments: list[Path],
+        recipient: str,
+        sender: str | None = None,
     ) -> None:
-        if recipients is None:
-            recipients = self._get_recipients("default")
-        if not recipients:
-            logger.warning("No recipients configured, skipping email")
-            return
+        from_addr = sender or self.sender
 
         message = MIMEMultipart("alternative")
-        message["From"] = self.sender
-        message["To"] = ", ".join(recipients)
+        message["From"] = from_addr
+        message["To"] = recipient
         message["Subject"] = subject
 
         message.attach(MIMEText(text_body, "plain", "utf-8"))
@@ -104,7 +101,19 @@ class EmailNotifier:
                 username=self.username,
                 password=self.password,
             )
-            logger.info("Email sent", extra={"recipients": recipients, "subject": subject})
+            logger.info(
+                "Email sent",
+                extra={"from": from_addr, "to": recipient, "subject": subject},
+            )
         except Exception as exc:
-            logger.error("Failed to send email", exc_info=exc)
+            logger.error(
+                "Failed to send email",
+                extra={
+                    "from": from_addr,
+                    "to": recipient,
+                    "subject": subject,
+                    "error": str(exc),
+                },
+                exc_info=True,
+            )
             raise
