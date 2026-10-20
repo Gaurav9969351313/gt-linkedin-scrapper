@@ -7,6 +7,7 @@ class JobStatus(str, enum.Enum):
     COMPLETED = "completed"
     ERROR = "error"
     HOLD = "hold"
+    DELETED = "deleted"
 
 
 class Tag(str, enum.Enum):

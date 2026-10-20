@@ -25,7 +25,7 @@ class Job(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
-        CheckConstraint("status IN ('idle','running','completed','error','hold')", name="ck_job_status"),
+        CheckConstraint("status IN ('idle','running','completed','error','hold','deleted')", name="ck_job_status"),
         CheckConstraint("scroll_count > 0", name="ck_scroll_count_positive"),
         Index("ix_jobs_status", "status"),
         Index("ix_jobs_tag", "tag"),

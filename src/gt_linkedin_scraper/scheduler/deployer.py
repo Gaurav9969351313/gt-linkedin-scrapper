@@ -2,7 +2,9 @@ import logging
 from pathlib import Path
 
 import yaml
+from sqlalchemy import text
 from prefect.client.orchestration import get_client
+from prefect.exceptions import ObjectNotFound
 from prefect.server.schemas.filters import FlowFilter, FlowFilterName
 
 from gt_linkedin_scraper.core.config import settings
@@ -75,6 +77,24 @@ async def _ensure_deployment(job: Job, client, flow_id: str) -> None:
             "Failed to create deployment",
             extra={"job_id": job.id, "deployment_name": name},
         )
+        raise
+
+
+async def deploy_job(job: Job) -> None:
+    async with get_client() as client:
+        flow_id = await _get_flow_id(client)
+        await _ensure_deployment(job, client, flow_id)
+
+
+async def undeploy_job(job_id: int) -> None:
+    name = f"{scrape_single_flow.name}/scrape-job-{job_id}"
+    async with get_client() as client:
+        try:
+            deployment = await client.read_deployment_by_name(name)
+        except ObjectNotFound:
+            return
+        await client.delete_deployment(deployment.id)
+    logger.info("Deleted deployment", extra={"job_id": job_id, "deployment_name": name})
 
 
 async def _ensure_email_dispatcher_deployment(client, flow_id: str) -> None:
@@ -127,10 +147,8 @@ async def _reconcile() -> None:
 
     async with async_session_factory() as db:
         repo = JobRepository(db)
-        existing_jobs = await repo.get_all(limit=1000)
+        existing_jobs = await repo.get_all(limit=1000, include_deleted=True)
         existing_map = {j.id: j for j in existing_jobs}
-
-        ids_from_config = {jd["id"] for jd in job_defs}
 
         for jd in job_defs:
             tag = _ensure_tag(jd.get("tag", "java"))
@@ -151,10 +169,12 @@ async def _reconcile() -> None:
                 )
                 db.add(job)
 
-        for job in existing_jobs:
-            if job.id not in ids_from_config:
-                await repo.delete(job.id)
-
+        # Jobs added from the UI/API are not in the YAML, so they are kept rather than deleted.
+        await db.flush()
+        # YAML jobs insert explicit ids, which bypass the serial; realign it so new jobs don't collide.
+        await db.execute(
+            text("SELECT setval(pg_get_serial_sequence('jobs', 'id'), COALESCE((SELECT MAX(id) FROM jobs), 1))")
+        )
         await db.commit()
 
         refreshed_jobs = await repo.get_all(limit=1000)
@@ -166,7 +186,10 @@ async def _reconcile() -> None:
     async with get_client() as client:
         flow_id = await _get_flow_id(client)
         for job in active_jobs:
-            await _ensure_deployment(job, client, flow_id)
+            try:
+                await _ensure_deployment(job, client, flow_id)
+            except Exception:
+                continue
 
         email_flow_id = await _get_email_flow_id(client)
         await _ensure_email_dispatcher_deployment(client, email_flow_id)

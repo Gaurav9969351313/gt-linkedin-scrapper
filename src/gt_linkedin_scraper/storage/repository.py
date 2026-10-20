@@ -13,15 +13,18 @@ class JobRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_all(self, limit: int = 100, offset: int = 0, status: str | None = None):
+    # Deleted jobs are soft-deleted (their scraped data is kept) and hidden unless asked for.
+    async def get_all(self, limit: int = 100, offset: int = 0, status: str | None = None, include_deleted: bool = False):
         stmt = select(Job).limit(limit).offset(offset)
+        if not include_deleted:
+            stmt = stmt.where(Job.status != JobStatus.DELETED)
         if status:
             stmt = stmt.where(Job.status == status)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def get_by_id(self, job_id: int) -> Job | None:
-        stmt = select(Job).where(Job.id == job_id)
+        stmt = select(Job).where(Job.id == job_id, Job.status != JobStatus.DELETED)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -46,12 +49,7 @@ class JobRepository:
         return job
 
     async def delete(self, job_id: int) -> bool:
-        job = await self.get_by_id(job_id)
-        if job is None:
-            return False
-        await self.session.delete(job)
-        await self.session.flush()
-        return True
+        return await self.update_status(job_id, JobStatus.DELETED) is not None
 
     async def add_run_log(
         self,

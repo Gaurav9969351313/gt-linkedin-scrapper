@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from gt_linkedin_scraper.models.candidate import Candidate
 from gt_linkedin_scraper.models.extraction import EmailRecord
+from gt_linkedin_scraper.models.job import Job
 
 
 def get_candidates(db: Session, tag: Optional[str] = None) -> List[Candidate]:
@@ -77,3 +78,8 @@ def get_email_stats(db: Session):
     dates = db.execute(date_stmt).all()
 
     return total, tag_count, tags, dates
+
+
+def get_jobs(db: Session) -> List[Job]:
+    return list(db.scalars(select(Job).where(Job.status != "deleted").order_by(Job.id)).all())
+
