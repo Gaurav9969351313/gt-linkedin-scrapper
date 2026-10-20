@@ -8,6 +8,7 @@ from playwright.async_api import async_playwright, BrowserContext, Page, Browser
 
 from gt_linkedin_scraper.core.config import settings
 from gt_linkedin_scraper.core.exceptions import LoginFailed, LinkedInCheckpointError
+from gt_linkedin_scraper.crawler.parser import Parser
 
 try:
     from playwright_stealth.stealth import Stealth
@@ -224,10 +225,15 @@ class LinkedInCrawler:
             raise LinkedInCheckpointError("LinkedIn checkpoint detected on search")
 
     async def scroll_and_collect(self, page: Page, scroll_count: int) -> str:
-        html_parts = []
+        # Keep each post once; storing every full snapshot grows quadratically and OOMs the browser.
+        posts: dict[str, None] = {}
+        last_html = ""
         for i in range(1, scroll_count + 1):
             await page.evaluate("(() => { const els = [document.documentElement, document.body, ...document.querySelectorAll('*')]; els.forEach(el => { if (el.scrollHeight > el.clientHeight + 100) { el.scrollTop += 6000; } }); })();")
             await page.wait_for_timeout(4000)
-            html_parts.append(await page.content())
-            logger.debug(f"Scroll iteration: {i}")
-        return "".join(html_parts)
+            last_html = await page.content()
+            for post in Parser.split_posts(last_html):
+                posts[post] = None
+            logger.debug(f"Scroll iteration: {i}", extra={"unique_posts": len(posts)})
+        # No post selector matched: fall back to the final page so the parser can save it for inspection.
+        return "".join(posts) if posts else last_html

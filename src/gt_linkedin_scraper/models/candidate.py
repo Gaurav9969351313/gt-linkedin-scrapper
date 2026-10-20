@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text, Boolean, func
+from sqlalchemy import Column, DateTime, Integer, String, Text, Boolean, func, text
 from sqlalchemy.sql import func as sql_func
 
 from gt_linkedin_scraper.core.database import Base
@@ -11,7 +11,7 @@ class Candidate(Base):
     name = Column(String(256), nullable=False)
     number = Column(String(64), nullable=False)
     subscription = Column(String(128), nullable=False)
-    is_active = Column(Boolean, nullable=False, server_default=sql_func.true())
+    is_active = Column(Boolean, nullable=False, server_default=text("false"))
     email = Column(String(256), nullable=False)
     email_password = Column(String(256), nullable=False)
     resume = Column(String(512), nullable=True)

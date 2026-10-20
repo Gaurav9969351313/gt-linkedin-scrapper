@@ -25,33 +25,46 @@ from gt_linkedin_scraper.storage.repository import (
 logger = logging.getLogger(__name__)
 
 
-async def _notify(job: Job, records_count: int, extract_dir: Path) -> None:
+async def _notify(job: Job, emails_csv: Path, email_count: int) -> None:
+    from gt_linkedin_scraper.notifier.emailer import (
+        render_report_html,
+        render_report_text,
+        report_subject,
+    )
+
+    if email_count == 0:
+        logger.info("No emails scraped, skipping report", extra={"job_id": job.id})
+        return
+
     try:
-        from gt_linkedin_scraper.notifier.emailer import render_report_html, render_report_text
-
-        today = datetime.now().strftime("%d-%m-%Y")
-        safe_keyword = job.keyword.replace(" ", "_").replace('"', "")
-        attachments = [
-            extract_dir / today / f"{safe_keyword}_emails.csv",
-            extract_dir / today / f"post_details_{safe_keyword}.csv",
-        ]
-        attachments = [p for p in attachments if p.exists()]
-
         notifier = EmailNotifier()
-        html_body = render_report_html(job.keyword, job.tag, records_count, today)
-        text_body = render_report_text(job.keyword, job.tag, records_count, today)
-        await notifier.send_with_attachments(
-            subject=f"Scraper Report: {job.keyword}",
-            html_body=html_body,
-            text_body=text_body,
-            attachments=attachments,
-        )
+        today = datetime.now().strftime("%d-%m-%Y")
+        subject = report_subject(job.tag, email_count)
+        html_body = render_report_html(job.keyword, job.tag, email_count, today, emails_csv.name)
+        text_body = render_report_text(job.keyword, job.tag, email_count, today, emails_csv.name)
+        recipients = notifier._get_recipients(job.tag)
     except Exception as exc:
         logger.error(
             "Notification failed",
             extra={"job_id": job.id, "error": str(exc)},
             exc_info=True,
         )
+        return
+
+    for recipient in recipients:
+        try:
+            await notifier.send_with_attachments(
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                attachments=[emails_csv],
+                recipient=recipient,
+            )
+        except Exception as exc:
+            logger.error(
+                "Report email failed",
+                extra={"job_id": job.id, "recipient": recipient, "error": str(exc)},
+            )
 
 logger = logging.getLogger(__name__)
 
@@ -121,10 +134,7 @@ async def run_job(job_id: int, db: AsyncSession) -> None:
             {"username": "", "emails_found": email, "content": ""}
             for email in unique_emails
         ]
-        Parser.write_csvs(csv_records, job.keyword, job.tag, extract_dir)
-
-        # Email notifications skipped for now
-        # await _notify(job, len(unique_emails) + len(posts), extract_dir)
+        emails_csv, email_count = Parser.write_csvs(csv_records, job.keyword, job.tag, extract_dir)
 
         await job_repo.update_status(job_id, JobStatus.COMPLETED)
         await job_repo.add_run_log(
@@ -136,6 +146,7 @@ async def run_job(job_id: int, db: AsyncSession) -> None:
             "Job completed",
             extra={"job_id": job_id, "emails": len(unique_emails), "posts": len(posts)},
         )
+        await _notify(job, emails_csv, email_count)
     except Exception as exc:
         logger.error(
             "Post-processing failed",

@@ -13,6 +13,13 @@ from gt_linkedin_scraper.core.exceptions import ParseError
 
 logger = logging.getLogger(__name__)
 
+POST_SELECTORS = [
+    'div._9cf78d2b',
+    'div._23fb2414',
+    'div[data-testid="lazy-column"]',
+    'div._6c1f1fa0',
+]
+
 EMAIL_REGEX = re.compile(r'[a-zA-Z0-9._%+-]+@(?![0-9]x\.png)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
 
 
@@ -45,20 +52,23 @@ class Parser:
         return list(dict.fromkeys(found))
 
     @staticmethod
+    def split_posts(html: str) -> list[str]:
+        soup = BeautifulSoup(html, "html.parser")
+        for selector in POST_SELECTORS:
+            posts = soup.select(selector)
+            if posts:
+                return [str(post) for post in posts]
+        return []
+
+    @staticmethod
     def extract_posts(html: str, job_id: int) -> list[dict]:
         if not html:
             logger.debug("No HTML provided for post extraction")
             return []
         try:
             soup = BeautifulSoup(html, "html.parser")
-            post_selectors = [
-                'div._9cf78d2b',
-                'div._23fb2414',
-                'div[data-testid="lazy-column"]',
-                'div._6c1f1fa0',
-            ]
             posts = []
-            for selector in post_selectors:
+            for selector in POST_SELECTORS:
                 posts = soup.select(selector)
                 if posts:
                     logger.debug(f"Found {len(posts)} posts using selector: {selector}")
@@ -99,7 +109,7 @@ class Parser:
             raise ParseError("Failed to parse posts") from exc
 
     @staticmethod
-    def write_csvs(records: list[dict], keyword: str, tag: str, extract_dir: Path) -> None:
+    def write_csvs(records: list[dict], keyword: str, tag: str, extract_dir: Path) -> tuple[Path, int]:
         today = datetime.now().strftime("%d-%m-%Y")
         out_dir = extract_dir / today
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -109,7 +119,7 @@ class Parser:
         posts_file = out_dir / f"post_details_{safe_keyword}.csv"
 
         emails_seen = set()
-        email_rows = [["Email"]]
+        email_rows = [["Email", "Tag"]]
         post_rows = [["Username", "Email", "Post Content"]]
 
         for rec in records:
@@ -117,7 +127,7 @@ class Parser:
             for email in email_list:
                 if email not in emails_seen:
                     emails_seen.add(email)
-                    email_rows.append([email])
+                    email_rows.append([email, tag])
             post_rows.append([
                 rec.get("username", "N/A"),
                 rec.get("emails_found", ""),
@@ -133,3 +143,4 @@ class Parser:
             writer.writerows(post_rows)
 
         logger.info("CSV files written", extra={"emails_file": str(emails_file), "posts_file": str(posts_file)})
+        return emails_file, len(emails_seen)

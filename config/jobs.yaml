@@ -1,12 +1,12 @@
 jobs:
   - id: 1
     keyword: '"Java" AND "Contract"'
-    scroll_count: 5
+    scroll_count: 20
     tag: java
     cron: "31 7 * * *"
 
   - id: 2
     keyword: '"devops" AND "pune"'
-    scroll_count: 5
+    scroll_count: 20
     tag: devops
     cron: "31 7 * * *"

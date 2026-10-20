@@ -1,13 +1,37 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Scraper Report</title></head>
-<body>
-  <h2>LinkedIn Job Scraper Report</h2>
-  <p><strong>Keyword:</strong> {{ keyword }}</p>
-  <p><strong>Tag:</strong> {{ tag }}</p>
-  <p><strong>Date:</strong> {{ date }}</p>
-  <p><strong>Records Extracted:</strong> {{ records_count }}</p>
-  <p><strong>Recipients:</strong> {{ recipients|join(", ") }}</p>
-  <p>Please find the attached CSV files for this run.</p>
+<head><meta charset="utf-8"><title>{{ category }} Jobs</title></head>
+<body style="margin:0;padding:24px;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;">
+    <tr>
+      <td style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
+        <h2 style="margin:0;font-size:20px;color:#111827;">{{ category }} Jobs &ndash; Contact Report</h2>
+        <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">{{ date }}</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:20px 24px;font-size:14px;line-height:1.6;">
+        <p style="margin:0 0 12px;">Hello,</p>
+        <p style="margin:0 0 16px;">
+          Today's LinkedIn search for <strong>{{ category }}</strong> openings found
+          <strong>{{ email_count }}</strong> unique recruiter / hiring contact email{{ "s" if email_count != 1 }}.
+          The full list is attached as a CSV file.
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:40%;">Search keyword</td><td style="padding:8px;border:1px solid #e5e7eb;">{{ keyword }}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">Tag</td><td style="padding:8px;border:1px solid #e5e7eb;">{{ tag }}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">Emails found</td><td style="padding:8px;border:1px solid #e5e7eb;">{{ email_count }}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">Attachment</td><td style="padding:8px;border:1px solid #e5e7eb;">{{ attachment_name }}</td></tr>
+        </table>
+        <p style="margin:0 0 12px;">The CSV contains two columns: <strong>Email</strong> and <strong>Tag</strong>.</p>
+        <p style="margin:0;">Regards,<br>LinkedIn Job Scraper</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:12px 24px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">
+        This is an automated message. Please do not reply to this email.
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

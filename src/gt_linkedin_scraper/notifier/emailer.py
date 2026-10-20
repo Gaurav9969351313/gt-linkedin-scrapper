@@ -18,25 +18,42 @@ env = Environment(
 )
 
 
-def render_report_html(keyword: str, tag: str, records_count: int, date: str) -> str:
+def report_category(tag: str) -> str:
+    return tag.replace("_", " ").title()
+
+
+def report_subject(tag: str, email_count: int) -> str:
+    return f"{report_category(tag)} Jobs - {email_count} Email{'s' if email_count != 1 else ''}"
+
+
+def render_report_html(keyword: str, tag: str, email_count: int, date: str, attachment_name: str) -> str:
     template = env.get_template("report.html.j2")
     return template.render(
+        category=report_category(tag),
         keyword=keyword,
         tag=tag,
-        records_count=records_count,
+        email_count=email_count,
         date=date,
-        recipients=settings.all_recipients,
+        attachment_name=attachment_name,
     )
 
 
-def render_report_text(keyword: str, tag: str, records_count: int, date: str) -> str:
-    return f"""LinkedIn Job Scraper Report
-=============================
-Keyword: {keyword}
+def render_report_text(keyword: str, tag: str, email_count: int, date: str, attachment_name: str) -> str:
+    return f"""Hello,
+
+Today's LinkedIn search for {report_category(tag)} openings found {email_count} unique recruiter / hiring contact email(s).
+The full list is attached as a CSV file (columns: Email, Tag).
+
+Search keyword: {keyword}
 Tag: {tag}
 Date: {date}
-Records Extracted: {records_count}
-Recipients: {", ".join(settings.all_recipients)}
+Emails found: {email_count}
+Attachment: {attachment_name}
+
+Regards,
+LinkedIn Job Scraper
+
+This is an automated message. Please do not reply to this email.
 """
 
 
@@ -74,13 +91,15 @@ class EmailNotifier:
     ) -> None:
         from_addr = sender or self.sender
 
-        message = MIMEMultipart("alternative")
+        message = MIMEMultipart("mixed")
         message["From"] = from_addr
         message["To"] = recipient
         message["Subject"] = subject
 
-        message.attach(MIMEText(text_body, "plain", "utf-8"))
-        message.attach(MIMEText(html_body, "html", "utf-8"))
+        body = MIMEMultipart("alternative")
+        body.attach(MIMEText(text_body, "plain", "utf-8"))
+        body.attach(MIMEText(html_body, "html", "utf-8"))
+        message.attach(body)
 
         for attachment in attachments:
             if not attachment.exists():

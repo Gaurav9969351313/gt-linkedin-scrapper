@@ -38,7 +38,7 @@ uvicorn gt_linkedin_scraper.api.main:app --host 0.0.0.0 --port 8000 --reload
 prefect worker start --pool default
 ```
 
-The `.env` file already points to `localhost:5432` and `localhost:4200`, so no configuration changes are needed.
+The `.env` file already points to `localhost:5433` and `localhost:4200`, so no configuration changes are needed.
 
 ## Docker Production
 

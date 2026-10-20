@@ -191,7 +191,7 @@ def save_resume_file(uploaded_file_path: str, candidate_name: str) -> str | None
 
 def main():
     load_dotenv()
-    database_url = os.environ.get("DATABASE_URL_SYNC", "postgresql+psycopg2://scraper:scraper_pass@localhost:5432/scraper_db")
+    database_url = os.environ.get("DATABASE_URL_SYNC", "postgresql+psycopg2://scraper:scraper_pass@localhost:5433/scraper_db")
     engine = create_engine(database_url, future=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 

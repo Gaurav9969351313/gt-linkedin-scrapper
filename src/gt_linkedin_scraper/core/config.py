@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = "postgresql+asyncpg://scraper:scraper_pass@localhost:5432/scraper_db"
+    database_url: str = "postgresql+asyncpg://scraper:scraper_pass@localhost:5433/scraper_db"
     db_pool_size: int = 10
     db_max_overflow: int = 20
 
