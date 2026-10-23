@@ -172,7 +172,7 @@ The web app is **invite-only**, so nobody can sign in until you create the first
 password interactively, so it won't work from inside an IDE "run" panel:
 
 ```powershell
-docker exec -it scraper-frontend-v2 gt-create-super-admin --email you@example.com --name "Your Name"
+docker exec -it scraper-frontend-v2 gt-create-super-admin --email epostgauravtalele@gmail.com --name "Gaurav Talele"
 ```
 
 ```
