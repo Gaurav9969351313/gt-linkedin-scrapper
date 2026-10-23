@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -51,6 +52,7 @@ async def _notify(job: Job, emails_csv: Path, email_count: int) -> None:
         )
         return
 
+    logger.info(f"Job {job.id}: sending report to {len(recipients)} recipients: {recipients}", extra={"job_id": job.id})
     for recipient in recipients:
         try:
             await notifier.send_with_attachments(
@@ -60,9 +62,10 @@ async def _notify(job: Job, emails_csv: Path, email_count: int) -> None:
                 attachments=[emails_csv],
                 recipient=recipient,
             )
+            logger.info(f"Job {job.id}: report sent to {recipient}", extra={"job_id": job.id})
         except Exception as exc:
             logger.error(
-                "Report email failed",
+                f"Report email to {recipient} failed: {exc}",
                 extra={"job_id": job.id, "recipient": recipient, "error": str(exc)},
             )
 
@@ -79,30 +82,49 @@ async def run_job(job_id: int, db: AsyncSession) -> None:
         logger.error("Job not found", extra={"job_id": job_id})
         return
 
+    logger.info(
+        f"Job {job_id} loaded: keyword={job.keyword!r} tag={job.tag} scroll_count={job.scroll_count} status={job.status}",
+        extra={"job_id": job_id},
+    )
+
     if job.status == JobStatus.HOLD:
-        logger.info("Job on hold, skipping", extra={"job_id": job_id})
+        logger.info(f"Job {job_id} on hold, skipping", extra={"job_id": job_id})
         return
 
     await job_repo.update_status(job_id, JobStatus.RUNNING)
     await job_repo.add_run_log(job_id, JobStatus.RUNNING)
 
     html = ""
+    step = "browser start"
+    step_start = time.perf_counter()
+
+    def finish_step(next_step: str) -> None:
+        nonlocal step, step_start
+        logger.info(f"Job {job_id}: {step} done in {time.perf_counter() - step_start:.1f}s", extra={"job_id": job_id})
+        step, step_start = next_step, time.perf_counter()
+
     try:
         async with BrowserPool() as pool:
             async with await pool.new_context() as context:
                 page = await context.new_page()
                 crawler = LinkedInCrawler(context)
+                finish_step("login")
                 await crawler.ensure_login(page)
+                finish_step("search")
                 await crawler.navigate_to_search(page, job.keyword)
+                finish_step("scroll")
                 html = await crawler.scroll_and_collect(page, job.scroll_count)
+                finish_step("browser close")
+        finish_step("parse")
+        logger.info(f"Job {job_id}: collected {len(html)} chars of HTML", extra={"job_id": job_id})
     except LinkedInCheckpointError as exc:
-        logger.error("Checkpoint detected", extra={"job_id": job_id, "error": str(exc)})
+        logger.error(f"Job {job_id}: checkpoint detected during {step}: {exc}", extra={"job_id": job_id, "error": str(exc)})
         await job_repo.update_status(job_id, JobStatus.ERROR)
         await job_repo.add_run_log(job_id, JobStatus.ERROR, error_message=str(exc))
         await db.commit()
         return
     except Exception as exc:
-        logger.error("Job failed", extra={"job_id": job_id, "error": str(exc)}, exc_info=True)
+        logger.error(f"Job {job_id} failed during {step}: {exc}", extra={"job_id": job_id, "error": str(exc)}, exc_info=True)
         await job_repo.update_status(job_id, JobStatus.ERROR)
         await job_repo.add_run_log(job_id, JobStatus.ERROR, error_message=str(exc))
         await db.commit()
@@ -128,6 +150,10 @@ async def run_job(job_id: int, db: AsyncSession) -> None:
             for p in posts
         ]
         await post_repo.add_many(post_records)
+        logger.info(
+            f"Job {job_id}: saved {len(email_records)} unique emails ({len(emails)} total) and {len(post_records)} posts",
+            extra={"job_id": job_id},
+        )
 
         extract_dir = Path("extract")
         csv_records = posts + [
@@ -143,13 +169,13 @@ async def run_job(job_id: int, db: AsyncSession) -> None:
         )
         await db.commit()
         logger.info(
-            "Job completed",
+            f"Job {job_id} completed: {len(unique_emails)} emails, {len(posts)} posts, CSV {emails_csv}",
             extra={"job_id": job_id, "emails": len(unique_emails), "posts": len(posts)},
         )
         await _notify(job, emails_csv, email_count)
     except Exception as exc:
         logger.error(
-            "Post-processing failed",
+            f"Job {job_id} post-processing failed: {exc}",
             extra={"job_id": job_id, "error": str(exc)},
             exc_info=True,
         )

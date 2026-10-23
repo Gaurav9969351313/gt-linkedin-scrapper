@@ -34,6 +34,13 @@ USERNAME_SELECTORS = [
     "input[id='session_key']",
 ]
 
+# URL fragments LinkedIn redirects to when the browser is not logged in
+LOGGED_OUT_URL_MARKERS = ["/login", "/checkpoint", "/authwall", "/signup"]
+
+
+def _is_logged_out_url(url: str) -> bool:
+    return any(marker in url for marker in LOGGED_OUT_URL_MARKERS)
+
 PASSWORD_SELECTORS = [
     "input[type='password']",
     "#password",
@@ -111,13 +118,17 @@ class LinkedInCrawler:
                 with open(auth_path, "r", encoding="utf-8") as f:
                     cookies = json.load(f)
                 await self.context.add_cookies(cookies)
+                logger.info(f"Loaded {len(cookies)} cookies from {auth_path}, opening feed")
                 await page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
                 await page.wait_for_timeout(3000)
-                if "login" not in page.url:
-                    logger.info("Session restored from auth state")
+                if not _is_logged_out_url(page.url):
+                    logger.info(f"LOGIN OK: session restored from auth state (landed on {page.url})")
                     return
+                logger.info(f"Saved session not valid (redirected to {page.url}), will re-login")
             except Exception as exc:
-                logger.warning("Auth state load failed, will re-login", exc_info=exc)
+                logger.warning(f"Auth state load failed, will re-login: {exc}", exc_info=exc)
+        else:
+            logger.info(f"No auth state at {auth_path}, logging in with credentials")
 
         await self._perform_login(page)
         await self._persist_auth()
@@ -138,12 +149,12 @@ class LinkedInCrawler:
         logger.info("Navigating to LinkedIn login")
         start = time.time()
         await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
-        logger.debug(f"Login page loaded in {time.time() - start:.2f}s")
+        logger.info(f"Login page loaded in {time.time() - start:.2f}s ({page.url})")
         await page.wait_for_timeout(10000)
 
         for attempt in range(1, 4):
             try:
-                logger.info(f"Login attempt {attempt}/3")
+                logger.info(f"Login attempt {attempt}/3 on {page.url}")
                 await self._save_screenshot(page, f"login-attempt-{attempt}-before.png")
 
                 username_sel = await self._first_visible_selector(page, USERNAME_SELECTORS, timeout=1000)
@@ -162,19 +173,32 @@ class LinkedInCrawler:
                 submit_sel = await self._first_visible_selector(page, SUBMIT_SELECTORS, timeout=5000)
                 if not submit_sel:
                     raise RuntimeError("Submit button not found")
+                logger.debug(f"Login form selectors: username={username_sel} password={password_sel} submit={submit_sel}")
                 await page.click(submit_sel)
                 await page.wait_for_timeout(4000)
+                logger.info(f"Login submitted, now on {page.url}")
 
                 if "/checkpoint" in page.url:
                     raise LinkedInCheckpointError("LinkedIn checkpoint detected — manual intervention required")
+                if _is_logged_out_url(page.url):
+                    raise LoginFailed(f"Still not logged in after submit (on {page.url}) — check credentials or captcha")
 
-                logger.info("Login successful")
+                if "/feed" in page.url:
+                    logger.info(f"LOGIN OK: logged in on attempt {attempt} ({page.url})")
+                else:
+                    logger.warning(f"LOGIN OK (unverified): left login page but landed on {page.url}, not the feed")
                 return
+            except LinkedInCheckpointError:
+                # Retrying can't clear a checkpoint, and the page no longer has the login form
+                logger.error(f"LOGIN FAILED: checkpoint on attempt {attempt} ({page.url})")
+                await self._save_screenshot(page, f"login-attempt-{attempt}-checkpoint.png")
+                raise
             except Exception as exc:
-                logger.warning(f"Login attempt {attempt} failed: {exc}", exc_info=True)
+                logger.warning(f"Login attempt {attempt} failed on {page.url}: {exc}", exc_info=True)
                 await self._save_screenshot(page, f"login-attempt-{attempt}-failed.png")
                 if attempt == 3:
-                    raise
+                    logger.error(f"LOGIN FAILED: all 3 attempts failed, last error: {exc}")
+                    raise LoginFailed(f"Login failed after 3 attempts: {exc}") from exc
                 await page.wait_for_timeout(2000)
 
     async def _save_screenshot(self, page: Page, filename: str) -> None:
@@ -220,6 +244,7 @@ class LinkedInCrawler:
         logger.info("Navigating to search", extra={"keyword": keyword})
         await page.goto(url, wait_until="domcontentloaded")
         await page.wait_for_timeout(4000)
+        logger.info(f"Search page loaded for {keyword!r} ({page.url})")
 
         if "/checkpoint" in page.url:
             raise LinkedInCheckpointError("LinkedIn checkpoint detected on search")
@@ -234,6 +259,8 @@ class LinkedInCrawler:
             last_html = await page.content()
             for post in Parser.split_posts(last_html):
                 posts[post] = None
-            logger.debug(f"Scroll iteration: {i}", extra={"unique_posts": len(posts)})
+            logger.info(f"Scroll {i}/{scroll_count}: {len(posts)} unique posts so far", extra={"unique_posts": len(posts)})
+        if not posts:
+            logger.warning(f"No posts matched after {scroll_count} scrolls on {page.url}, returning raw page HTML")
         # No post selector matched: fall back to the final page so the parser can save it for inspection.
         return "".join(posts) if posts else last_html

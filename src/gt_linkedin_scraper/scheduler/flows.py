@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 
 from prefect import flow, task
@@ -16,6 +17,10 @@ from gt_linkedin_scraper.storage.repository import JobRepository
 
 logger = logging.getLogger(__name__)
 
+# Prefect sets the root logger to WARNING, which would drop our INFO/DEBUG logs in flow runs.
+# PREFECT_LOGGING_EXTRA_LOGGERS=gt_linkedin_scraper forwards them to the Prefect UI.
+logging.getLogger("gt_linkedin_scraper").setLevel(settings.log_level.upper())
+
 
 def slugify_name(name: str) -> str:
     value = name.lower()
@@ -28,18 +33,26 @@ def slugify_name(name: str) -> str:
 
 @task(retries=3, retry_delay_seconds=[60, 120, 300])
 async def scrape_job_task(job_id: int) -> dict:
+    logger.info(f"Scrape task started for job {job_id}", extra={"job_id": job_id})
+    start = time.perf_counter()
     async with async_session_factory() as db:
         try:
             await run_job(job_id, db)
+            logger.info(
+                f"Scrape task finished for job {job_id} in {time.perf_counter() - start:.1f}s",
+                extra={"job_id": job_id},
+            )
             return {"job_id": job_id, "status": "completed"}
         except Exception as exc:
-            logger.error("Task failed", extra={"job_id": job_id, "error": str(exc)})
+            logger.error(f"Task failed for job {job_id}: {exc}", extra={"job_id": job_id, "error": str(exc)}, exc_info=True)
             return {"job_id": job_id, "status": "error", "error": str(exc)}
 
 
 @flow(name="scrape-single-job")
 async def scrape_single_flow(job_id: int) -> dict:
+    logger.info(f"Flow scrape-single-job started for job {job_id} (log level {settings.log_level.upper()})")
     result = await scrape_job_task(job_id)
+    logger.info(f"Flow scrape-single-job result: {result}")
     return result
 
 
@@ -48,9 +61,11 @@ async def scrape_all_flow() -> list[dict]:
     async with async_session_factory() as db:
         repo = JobRepository(db)
         jobs = await repo.get_all(limit=1000)
+    logger.info(f"Flow scrape-all-jobs found {len(jobs)} jobs")
     results = []
     for job in jobs:
-        if job.status.value == "hold":
+        if job.status == "hold":
+            logger.info(f"Skipping job {job.id} (on hold)", extra={"job_id": job.id})
             continue
         result = await scrape_job_task(job.id)
         results.append(result)
