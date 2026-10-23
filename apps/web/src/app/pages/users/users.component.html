@@ -1,0 +1,214 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Users</h1>
+      <p class="muted">
+        Invite-only access.
+        @if (auth.isSuperAdmin()) { As a super admin you can manage admins and users. }
+        @else { As an admin you can approve, invite and manage users. }
+      </p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="openInvite()"><app-icon name="mail" /> Invite</button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ error() }}</div>
+  }
+  @if (notice()) {
+    <div class="alert alert-success" role="status">{{ notice() }}</div>
+  }
+
+  <div class="tabs" role="tablist" aria-label="User management">
+    <button type="button" class="tab" role="tab" [attr.aria-selected]="tab() === 'requests'" (click)="tab.set('requests')">
+      Access requests <span class="count" [class.count-alert]="requests().length">{{ requests().length }}</span>
+    </button>
+    <button type="button" class="tab" role="tab" [attr.aria-selected]="tab() === 'members'" (click)="tab.set('members')">
+      Members <span class="count">{{ members().length }}</span>
+    </button>
+    <button type="button" class="tab" role="tab" [attr.aria-selected]="tab() === 'invitations'" (click)="tab.set('invitations')">
+      Pending invitations <span class="count">{{ invitations().length }}</span>
+    </button>
+  </div>
+
+  <section class="card flush" role="tabpanel">
+    @if (loading()) {
+      <p class="muted pad" role="status">Loading…</p>
+    } @else {
+      @switch (tab()) {
+        @case ('requests') {
+          @if (!requests().length) {
+            <div class="empty"><app-icon name="inbox" [size]="28" /> No access requests waiting for review.</div>
+          } @else {
+            <ul class="requests">
+              @for (u of requests(); track u.id) {
+                <li class="request">
+                  <div class="who">
+                    <div class="name">{{ u.name }}</div>
+                    <div class="muted small">{{ u.email }} · requested {{ u.created_at | date: 'medium' }}</div>
+                    @if (u.request_reason) { <p class="reason">“{{ u.request_reason }}”</p> }
+                  </div>
+                  @if (u.can_manage) {
+                    <div class="decide">
+                      <label class="sr-only" [for]="'role-' + u.id">Role for {{ u.name }}</label>
+                      <select class="select" [id]="'role-' + u.id" [(ngModel)]="approveRole[u.id]" [ngModelOptions]="{ standalone: true }">
+                        @for (r of assignable(); track r) { <option [value]="r">{{ roleLabels[r] }}</option> }
+                      </select>
+                      <button type="button" class="btn btn-secondary" (click)="reject(u)" [disabled]="busyId() !== null">Reject</button>
+                      <button type="button" class="btn btn-primary" (click)="approve(u)" [disabled]="busyId() !== null">
+                        {{ busyId() === 'approve-' + u.id ? 'Approving…' : 'Approve' }}
+                      </button>
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        }
+
+        @case ('members') {
+          @if (!members().length) {
+            <div class="empty"><app-icon name="users" [size]="28" /> No members yet.</div>
+          } @else {
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Last sign-in</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (u of members(); track u.id) {
+                    <tr>
+                      <td>
+                        <div class="name">{{ u.name }} @if (u.id === auth.user()?.id) { <span class="muted small">(you)</span> }</div>
+                        <div class="muted small">{{ u.email }}</div>
+                      </td>
+                      <td>
+                        @if (u.can_manage && auth.isSuperAdmin() && u.status === 'active') {
+                          <label class="sr-only" [for]="'member-role-' + u.id">Role for {{ u.name }}</label>
+                          <select class="select select-sm" [id]="'member-role-' + u.id" [ngModel]="u.role" (ngModelChange)="changeRole(u, $event)" [disabled]="busyId() !== null">
+                            @for (r of assignable(); track r) { <option [value]="r">{{ roleLabels[r] }}</option> }
+                          </select>
+                        } @else {
+                          <span class="badge badge-role" [class]="u.role">{{ roleLabels[u.role] }}</span>
+                        }
+                      </td>
+                      <td>
+                        @switch (u.status) {
+                          @case ('active') { <span class="badge badge-success">Active</span> }
+                          @case ('disabled') { <span class="badge badge-danger">Disabled</span> }
+                          @case ('rejected') { <span class="badge">Rejected</span> }
+                        }
+                      </td>
+                      <td class="muted small">{{ u.last_login_at ? (u.last_login_at | date: 'medium') : 'Never' }}</td>
+                      <td class="row-actions">
+                        @if (u.can_manage) {
+                          @if (u.status === 'active') {
+                            <button type="button" class="btn btn-secondary" (click)="setEnabled(u, false)" [disabled]="busyId() !== null">Disable</button>
+                          } @else if (u.status === 'disabled') {
+                            <button type="button" class="btn btn-secondary" (click)="setEnabled(u, true)" [disabled]="busyId() !== null">Enable</button>
+                          }
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+
+        @case ('invitations') {
+          @if (!invitations().length) {
+            <div class="empty">
+              <app-icon name="mail" [size]="28" /> No pending invitations.
+              <button type="button" class="btn btn-secondary" (click)="openInvite()">Invite someone</button>
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Expires</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (inv of invitations(); track inv.id) {
+                    <tr>
+                      <td>{{ inv.email }}</td>
+                      <td><span class="badge badge-role" [class]="inv.role">{{ roleLabels[inv.role] }}</span></td>
+                      <td>
+                        @if (inv.expired) { <span class="badge badge-danger">Expired</span> }
+                        @else { <span class="muted small">{{ inv.expires_at | date: 'medium' }}</span> }
+                      </td>
+                      <td class="row-actions">
+                        @if (inv.can_manage) {
+                          <button type="button" class="btn btn-secondary" (click)="resend(inv)" [disabled]="busyId() !== null">Resend</button>
+                          <button type="button" class="btn btn-ghost" (click)="revoke(inv)" [disabled]="busyId() !== null">Revoke</button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+      }
+    }
+  </section>
+</div>
+
+<dialog #inviteDialog class="modal modal-sm" aria-labelledby="invite-title" (close)="inviting.set(false)">
+  <div class="modal-head">
+    <h2 id="invite-title">{{ inviteResult() ? 'Invitation ready' : 'Invite someone' }}</h2>
+    <button type="button" class="btn btn-ghost btn-icon" (click)="inviteDialog.close()" aria-label="Close"><app-icon name="x" /></button>
+  </div>
+
+  @if (inviteResult(); as res) {
+    @if (res.email_sent) {
+      <div class="alert alert-success" role="status"><app-icon name="mail" [size]="18" /> Invitation emailed to {{ res.invitation.email }}.</div>
+    } @else {
+      <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> The email couldn't be sent. Share the link below with {{ res.invitation.email }} yourself.</div>
+    }
+    <div class="field">
+      <label for="invite-link">One-time invite link</label>
+      <div class="copy-row">
+        <input id="invite-link" class="input mono" [value]="res.invite_url" readonly (focus)="$any($event.target).select()" />
+        <button type="button" class="btn btn-secondary" (click)="copyLink()">{{ copied() ? 'Copied' : 'Copy' }}</button>
+      </div>
+      <span class="hint">Anyone with this link can create the account. It's shown only now; resending creates a new link.</span>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-primary" (click)="inviteDialog.close()">Done</button>
+    </div>
+  } @else {
+    @if (inviteError()) {
+      <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ inviteError() }}</div>
+    }
+    <form class="invite-form" (ngSubmit)="sendInvite()" #f="ngForm">
+      <div class="field">
+        <label for="invite-email">Email</label>
+        <input id="invite-email" class="input" type="email" name="email" required email [(ngModel)]="inviteEmail" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="invite-role">Role</label>
+        <select id="invite-role" class="select" name="role" [(ngModel)]="inviteRole" [disabled]="assignable().length === 1">
+          @for (r of assignable(); track r) { <option [value]="r">{{ roleLabels[r] }}</option> }
+        </select>
+        @if (!auth.isSuperAdmin()) { <span class="hint">Only a super admin can invite admins.</span> }
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" (click)="inviteDialog.close()">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="inviting() || !f.valid">{{ inviting() ? 'Sending…' : 'Send invite' }}</button>
+      </div>
+    </form>
+  }
+</dialog>

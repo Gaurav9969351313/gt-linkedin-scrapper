@@ -66,8 +66,8 @@ class Parser:
 
             if not posts:
                 logger.debug("No posts found with current selectors, saving HTML for inspection")
-                extract_dir = Path("extract")
-                extract_dir.mkdir(exist_ok=True)
+                extract_dir = Path(settings.extract_dir)
+                extract_dir.mkdir(parents=True, exist_ok=True)
                 html_path = extract_dir / f"search-result-{job_id}.html"
                 with open(html_path, "w", encoding="utf-8") as f:
                     f.write(html)
@@ -99,7 +99,7 @@ class Parser:
             raise ParseError("Failed to parse posts") from exc
 
     @staticmethod
-    def write_csvs(records: list[dict], keyword: str, tag: str, extract_dir: Path) -> None:
+    def write_csvs(records: list[dict], keyword: str, tag: str, extract_dir: Path) -> tuple[Path, Path]:
         today = datetime.now().strftime("%d-%m-%Y")
         out_dir = extract_dir / today
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -132,4 +132,5 @@ class Parser:
             writer = csv.writer(f)
             writer.writerows(post_rows)
 
-        logger.info("CSV files written", extra={"emails_file": str(emails_file), "posts_file": str(posts_file)})
+        logger.info(f"CSV files written: {emails_file}, {posts_file}")
+        return emails_file, posts_file

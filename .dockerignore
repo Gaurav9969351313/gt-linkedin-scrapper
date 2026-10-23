@@ -18,9 +18,7 @@ __pycache__/
 htmlcov/
 
 # Runtime data directories (mounted via docker-compose volumes)
-data/
-logs/
-extract/
+runtime/
 *.db
 *.sqlite
 *.sqlite3
@@ -42,8 +40,16 @@ docker-compose*.yml
 Makefile
 AGENTS.md
 kilo.json
-query
-monitor_task.py
-run_job_directly.py
+docs/
+tests/
 .kilo/
-debug/
+.claude/
+
+# Angular app build artifacts (rebuilt inside the image)
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.angular/
+
+# Runtime / personal data (mounted via docker-compose volumes)
+apps/streamlit/.streamlit/secrets.toml
+.env

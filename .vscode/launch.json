@@ -24,7 +24,7 @@
       "name": "Run Job Directly",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/run_job_directly.py",
+      "program": "${workspaceFolder}/scripts/run_job_directly.py",
       "console": "integratedTerminal",
       "python": "${workspaceFolder}/.venv/Scripts/python.exe",
       "env": {
@@ -43,17 +43,6 @@
       }
     },
     {
-      "name": "Debug LinkedIn Login",
-      "type": "python",
-      "request": "launch",
-      "program": "${workspaceFolder}/debug_test2.py",
-      "console": "integratedTerminal",
-      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
-      }
-    },
-    {
       "name": "Seed Jobs",
       "type": "python",
       "request": "launch",
@@ -63,6 +52,22 @@
       "env": {
         "PYTHONPATH": "${workspaceFolder}/src"
       }
+    },
+    {
+      "name": "Run Web API",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "gt_linkedin_scraper.web.app:app",
+        "--port",
+        "8502",
+        "--reload",
+        "--reload-dir",
+        "src"
+      ],
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe"
     }
   ]
 }

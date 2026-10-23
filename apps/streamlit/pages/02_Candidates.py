@@ -1,0 +1,159 @@
+from typing import Optional
+
+import streamlit as st
+
+from auth import check_auth
+from gt_linkedin_scraper.core.sync_database import SessionLocal
+from gt_linkedin_scraper.models.candidate import Candidate
+from gt_linkedin_scraper.storage.resumes import save_resume
+from gt_linkedin_scraper.storage.tags import active_tag_names
+from gt_linkedin_scraper.storage.sync_repository import (
+    create_candidate,
+    delete_candidate,
+    get_candidate,
+    get_candidates,
+    update_candidate,
+)
+
+st.set_page_config(page_title="Candidates", layout="wide")
+
+if not check_auth():
+    st.stop()
+
+with SessionLocal() as _db:
+    ALLOWED_TAGS = active_tag_names(_db)  # managed by super admins in the web app
+
+
+def save_resume_file(uploaded_file, candidate_name: str) -> Optional[str]:
+    if uploaded_file is None:
+        return None
+    return save_resume(uploaded_file.getbuffer().tobytes(), uploaded_file.name, candidate_name)
+
+
+def candidate_form(candidate=None):
+    with st.form("candidate_form"):
+        name = st.text_input("Name", value=candidate.name if candidate else "")
+        number = st.text_input("Number", value=candidate.number if candidate else "")
+        subscription = st.text_input("Subscription", value=candidate.subscription if candidate else "")
+        is_active = st.checkbox("Is Active", value=candidate.is_active if candidate else True)
+        email = st.text_input("Email", value=candidate.email if candidate else "")
+        email_password = st.text_input("Email Password", value=candidate.email_password if candidate else "", type="password")
+        # Keep a candidate's current tag selectable even if it has since been deactivated.
+        tag_options = ALLOWED_TAGS + ([candidate.tag] if candidate and candidate.tag not in ALLOWED_TAGS else [])
+        tag = st.selectbox("Tag", tag_options, index=tag_options.index(candidate.tag) if candidate else 0)
+        email_subject = st.text_input("Email Subject", value=candidate.email_subject if candidate else "")
+        resume_file = st.file_uploader("Resume", type=["pdf", "docx"])
+        email_body = st.text_area("Email Body (HTML)", value=candidate.email_body if candidate else "", height=200)
+        submitted = st.form_submit_button("Save")
+        if submitted:
+            return {
+                "name": name,
+                "number": number,
+                "subscription": subscription,
+                "is_active": is_active,
+                "email": email,
+                "email_password": email_password,
+                "tag": tag,
+                "email_subject": email_subject,
+                "resume_file": resume_file,
+                "email_body": email_body,
+            }
+    return None
+
+
+def render_candidates():
+    with SessionLocal() as db:
+        candidates = get_candidates(db)
+
+    st.subheader("Candidates")
+    if not candidates:
+        st.info("No candidates found.")
+        return
+
+    for candidate in candidates:
+        with st.expander(f"{candidate.name} ({candidate.tag})"):
+            st.write(f"**Number:** {candidate.number}")
+            st.write(f"**Subscription:** {candidate.subscription}")
+            st.write(f"**Active:** {candidate.is_active}")
+            st.write(f"**Email:** {candidate.email}")
+            st.write(f"**Email Subject:** {candidate.email_subject}")
+            st.write(f"**Resume:** {candidate.resume}")
+            st.write(f"**Email Body:** {candidate.email_body[:500]}...")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Edit", key=f"edit_{candidate.id}"):
+                    st.session_state["edit_candidate_id"] = candidate.id
+            with col2:
+                if st.button("Delete", key=f"delete_{candidate.id}"):
+                    st.session_state["delete_candidate_id"] = candidate.id
+
+
+st.title("Candidates")
+
+edit_id = st.session_state.get("edit_candidate_id")
+delete_id = st.session_state.get("delete_candidate_id")
+
+if delete_id:
+    with SessionLocal() as db:
+        candidate = get_candidate(db, delete_id)
+        if candidate:
+            st.warning(f"Delete {candidate.name}?")
+            if st.button("Confirm Delete"):
+                delete_candidate(db, delete_id)
+                st.session_state.pop("delete_candidate_id", None)
+                st.rerun()
+            if st.button("Cancel"):
+                st.session_state.pop("delete_candidate_id", None)
+                st.rerun()
+        else:
+            st.session_state.pop("delete_candidate_id", None)
+            st.rerun()
+
+if edit_id:
+    with SessionLocal() as db:
+        candidate = get_candidate(db, edit_id)
+        if candidate:
+            st.subheader("Edit Candidate")
+            form_data = candidate_form(candidate)
+            if form_data:
+                resume_path = save_resume_file(form_data["resume_file"], form_data["name"])
+                candidate.name = form_data["name"]
+                candidate.number = form_data["number"]
+                candidate.subscription = form_data["subscription"]
+                candidate.is_active = form_data["is_active"]
+                candidate.email = form_data["email"]
+                candidate.email_password = form_data["email_password"]
+                candidate.tag = form_data["tag"]
+                candidate.email_subject = form_data["email_subject"]
+                if resume_path:
+                    candidate.resume = resume_path
+                candidate.email_body = form_data["email_body"]
+                update_candidate(db, edit_id, candidate)
+                st.session_state.pop("edit_candidate_id", None)
+                st.rerun()
+        else:
+            st.session_state.pop("edit_candidate_id", None)
+            st.rerun()
+else:
+    st.subheader("Add Candidate")
+    form_data = candidate_form()
+    if form_data:
+        with SessionLocal() as db:
+            resume_path = save_resume_file(form_data["resume_file"], form_data["name"])
+            candidate = Candidate(
+                name=form_data["name"],
+                number=form_data["number"],
+                subscription=form_data["subscription"],
+                is_active=form_data["is_active"],
+                email=form_data["email"],
+                email_password=form_data["email_password"],
+                tag=form_data["tag"],
+                email_subject=form_data["email_subject"],
+                resume=resume_path,
+                email_body=form_data["email_body"],
+            )
+            create_candidate(db, candidate)
+        st.rerun()
+
+render_candidates()

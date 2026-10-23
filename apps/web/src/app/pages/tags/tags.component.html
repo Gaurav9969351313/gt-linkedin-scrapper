@@ -1,0 +1,115 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Tags</h1>
+      <p class="muted">Tags group scrape jobs, the HR emails they find, and the candidates those emails go to.</p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="openForm(null)"><app-icon name="plus" /> New tag</button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ error() }}</div>
+  }
+  @if (notice()) {
+    <div class="alert alert-success" role="status">{{ notice() }}</div>
+  }
+
+  <section class="card flush" aria-label="Tags">
+    @if (loading()) {
+      <p class="muted pad" role="status">Loading tags…</p>
+    } @else if (!tags().length) {
+      <div class="empty"><app-icon name="tag" [size]="28" /> No tags yet.</div>
+    } @else {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Tag</th>
+              <th scope="col">Description</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="num">Jobs</th>
+              <th scope="col" class="num">Candidates</th>
+              <th scope="col" class="num">Emails</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of tags(); track t.id) {
+              <tr [class.inactive]="!t.is_active">
+                <td>
+                  <div class="name">{{ t.label }}</div>
+                  <div class="muted small mono">{{ t.name }}</div>
+                </td>
+                <td class="muted small desc">{{ t.description || '—' }}</td>
+                <td>
+                  @if (t.is_active) { <span class="badge badge-success">Active</span> }
+                  @else { <span class="badge">Inactive</span> }
+                </td>
+                <td class="num">{{ t.usage?.jobs ?? 0 }}</td>
+                <td class="num">{{ t.usage?.candidates ?? 0 }}</td>
+                <td class="num">{{ t.usage?.email_records ?? 0 }}</td>
+                <td class="row-actions">
+                  <button type="button" class="btn btn-ghost" (click)="toggleActive(t)">{{ t.is_active ? 'Deactivate' : 'Activate' }}</button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="openForm(t)" [attr.aria-label]="'Edit ' + t.label" title="Edit"><app-icon name="pencil" /></button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="confirmDelete(t)" [disabled]="inUse(t)"
+                          [attr.aria-label]="'Delete ' + t.label"
+                          [title]="inUse(t) ? 'In use by jobs or candidates. Deactivate it instead.' : 'Delete'"><app-icon name="trash" /></button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
+
+<dialog #editDialog class="modal modal-sm" aria-labelledby="tag-form-title">
+  <div class="modal-head">
+    <h2 id="tag-form-title">{{ editing() ? 'Edit tag' : 'New tag' }}</h2>
+    <button type="button" class="btn btn-ghost btn-icon" (click)="editDialog.close()" aria-label="Close"><app-icon name="x" /></button>
+  </div>
+  @if (formError()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ formError() }}</div>
+  }
+  <form class="tag-form" (ngSubmit)="save()" #f="ngForm">
+    <div class="field">
+      <label for="tag-label">Label</label>
+      <input id="tag-label" class="input" name="label" required maxlength="128" [(ngModel)]="form.label" (ngModelChange)="onLabelChange($event)" />
+    </div>
+    <div class="field">
+      <label for="tag-name">Name</label>
+      <input id="tag-name" class="input mono" name="name" required maxlength="64" pattern="[a-z0-9][a-z0-9_]*"
+             [(ngModel)]="form.name" [readonly]="!!editing()" aria-describedby="tag-name-hint" />
+      <span id="tag-name-hint" class="hint">
+        @if (editing()) { The name is stored on jobs and candidates, so it can't change. }
+        @else { Lowercase letters, digits and underscores. Can't be changed later. }
+      </span>
+    </div>
+    <div class="field">
+      <label for="tag-desc">Description <span class="muted">(optional)</span></label>
+      <input id="tag-desc" class="input" name="description" maxlength="512" [(ngModel)]="form.description" />
+    </div>
+    @if (editing()) {
+      <label class="checkbox"><input type="checkbox" name="is_active" [(ngModel)]="form.is_active" /> Active (can be chosen for new jobs and candidates)</label>
+    }
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" (click)="editDialog.close()">Cancel</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving() || !f.valid">{{ saving() ? 'Saving…' : 'Save tag' }}</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog #deleteDialog class="modal modal-sm" aria-labelledby="tag-del-title" role="alertdialog">
+  <h2 id="tag-del-title">Delete tag?</h2>
+  <p class="muted">
+    “{{ deleting()?.label }}” will be removed.
+    @if (deleting()?.usage?.email_records) {
+      Its {{ deleting()?.usage?.email_records }} existing email records keep the tag name.
+    }
+  </p>
+  <div class="modal-actions">
+    <button type="button" class="btn btn-secondary" (click)="deleteDialog.close()">Cancel</button>
+    <button type="button" class="btn btn-danger" (click)="doDelete()" [disabled]="deleteBusy()">{{ deleteBusy() ? 'Deleting…' : 'Delete' }}</button>
+  </div>
+</dialog>

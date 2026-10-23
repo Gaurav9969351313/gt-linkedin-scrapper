@@ -4,12 +4,20 @@ __pycache__/
 .env
 .venv/
 venv/
-data/
-logs/
-extract/
 *.db
 *.sqlite
 *.sqlite3
 .DS_Store
 Thumbs.db
 node_modules/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Files the app writes at runtime (resumes, logs, CSV extracts, auth state)
+runtime/*
+!runtime/README.md
+
+# Streamlit login (copy secrets.toml.example)
+apps/streamlit/.streamlit/secrets.toml

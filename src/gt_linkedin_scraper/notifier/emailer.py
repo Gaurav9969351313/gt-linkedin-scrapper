@@ -101,19 +101,7 @@ class EmailNotifier:
                 username=self.username,
                 password=self.password,
             )
-            logger.info(
-                "Email sent",
-                extra={"from": from_addr, "to": recipient, "subject": subject},
-            )
+            logger.debug(f"Email sent from {from_addr} to {recipient}: {subject}")
         except Exception as exc:
-            logger.error(
-                "Failed to send email",
-                extra={
-                    "from": from_addr,
-                    "to": recipient,
-                    "subject": subject,
-                    "error": str(exc),
-                },
-                exc_info=True,
-            )
+            logger.debug(f"Failed to send email from {from_addr} to {recipient}: {exc}", exc_info=True)
             raise

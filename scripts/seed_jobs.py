@@ -1,4 +1,8 @@
-import asyncio
+"""Load jobs from config/jobs.yaml, overwriting jobs with the same id. Run scripts/migrate.py first.
+
+Jobs are normally managed in the web app (Scraper jobs). The scraper API only seeds
+from config/jobs.yaml when the jobs table is empty; use this script to force a reload.
+"""
 import logging
 import yaml
 from pathlib import Path
@@ -6,18 +10,9 @@ from sqlalchemy import create_engine, text
 
 from gt_linkedin_scraper.core.config import settings
 from gt_linkedin_scraper.models.job import Job
-from gt_linkedin_scraper.models.enums import JobStatus, Tag
+from gt_linkedin_scraper.models.enums import JobStatus
 
 logger = logging.getLogger(__name__)
-
-
-def sync_create_tables():
-    url = settings.database_url
-    sync_url = url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
-    engine = create_engine(sync_url)
-    from gt_linkedin_scraper.core.database import Base
-    Base.metadata.create_all(engine)
-    logger.info("Database tables created/verified")
 
 
 def sync_seed_jobs():
@@ -39,12 +34,12 @@ def sync_seed_jobs():
     engine = create_engine(sync_url)
 
     with engine.connect() as conn:
+        tags = {row[0] for row in conn.execute(text("SELECT name FROM tags WHERE is_active"))}
         for jd in jobs:
             tag = jd.get("tag", "java")
-            try:
-                tag_enum = Tag(tag)
-            except ValueError:
-                tag_enum = Tag.JAVA
+            if tag not in tags:
+                logger.warning(f"Skipping job {jd['id']}: unknown or inactive tag '{tag}'")
+                continue
 
             stmt = text("""
                 INSERT INTO jobs (id, keyword, scroll_count, tag, cron_expression, status)
@@ -59,15 +54,16 @@ def sync_seed_jobs():
                 "id": jd["id"],
                 "keyword": jd["keyword"],
                 "scroll_count": jd.get("scroll_count", 10),
-                "tag": tag_enum.value,
+                "tag": tag,
                 "cron": jd.get("cron", ""),
                 "status": JobStatus.IDLE.value,
             })
+        # Explicit ids leave the id sequence behind; move it past them.
+        conn.execute(text("SELECT setval(pg_get_serial_sequence('jobs', 'id'), COALESCE((SELECT MAX(id) FROM jobs), 0) + 1, false)"))
         conn.commit()
     logger.info(f"Seeded {len(jobs)} jobs")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    sync_create_tables()
     sync_seed_jobs()

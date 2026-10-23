@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-scraper_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -42,6 +42,9 @@ services:
     command: prefect worker start --pool default
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
+      # Show the scraper's own log lines (login, search, scrolling...) in each run's Logs tab.
+      PREFECT_LOGGING_EXTRA_LOGGERS: gt_linkedin_scraper
+      PREFECT_LOGGING_LEVEL: INFO
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-scraper}:${POSTGRES_PASSWORD:-scraper_pass}@postgres:5432/${POSTGRES_DB:-scraper_db}
       LINKEDIN_USERNAME: ${LINKEDIN_USERNAME}
       LINKEDIN_PASSWORD: ${LINKEDIN_PASSWORD}
@@ -53,15 +56,16 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       JOBS_CONFIG_PATH: ${JOBS_CONFIG_PATH:-config/jobs.yaml}
-      AUTH_STATE_PATH: ${AUTH_STATE_PATH:-data/auth_state.json}
+      AUTH_STATE_PATH: /app/runtime/data/auth_state.json
+      RESUME_UPLOAD_DIR: /app/runtime/resumes
+      LOG_DIR: /app/runtime/logs
+      EXTRACT_DIR: /app/runtime/extract
+      DEBUG_DIR: /app/runtime/debug
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
       - ./config:/app/config
-      - ./extract:/app/extract
-      - ./ResumeUploads:/app/ResumeUploads
+      - ./runtime:/app/runtime
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,7 +80,8 @@ services:
   api:
     build: .
     container_name: scraper-api
-    command: uvicorn gt_linkedin_scraper.api.main:app --host 0.0.0.0 --port 8000
+    # Migrates the database, then serves the API (which registers Prefect deployments).
+    command: sh -c "python scripts/migrate.py && uvicorn gt_linkedin_scraper.api.main:app --host 0.0.0.0 --port 8000"
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-scraper}:${POSTGRES_PASSWORD:-scraper_pass}@postgres:5432/${POSTGRES_DB:-scraper_db}
@@ -90,18 +95,22 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       JOBS_CONFIG_PATH: ${JOBS_CONFIG_PATH:-config/jobs.yaml}
-      AUTH_STATE_PATH: ${AUTH_STATE_PATH:-data/auth_state.json}
+      AUTH_STATE_PATH: /app/runtime/data/auth_state.json
+      LOG_DIR: /app/runtime/logs
+      EXTRACT_DIR: /app/runtime/extract
+      DEBUG_DIR: /app/runtime/debug
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
       - ./config:/app/config
-      - ./extract:/app/extract
+      - ./runtime:/app/runtime
     ports:
       - "8000:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      # The API registers Prefect deployments on startup, so Prefect must be up first.
+      prefect-server:
         condition: service_healthy
     restart: unless-stopped
 
@@ -124,24 +133,52 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Streamlit UI (original frontend)
   frontend:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: apps/streamlit/Dockerfile
     container_name: scraper-frontend
-    command: streamlit run frontend/app.py --server.port=8501 --server.address=0.0.0.0
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-scraper}:${POSTGRES_PASSWORD:-scraper_pass}@postgres:5432/${POSTGRES_DB:-scraper_db}
       DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-scraper}:${POSTGRES_PASSWORD:-scraper_pass}@postgres:5432/${POSTGRES_DB:-scraper_db}
+      RESUME_UPLOAD_DIR: /app/runtime/resumes
     env_file:
       - .env
     volumes:
-      - ./frontend/.streamlit:/app/.streamlit
-      - ./ResumeUploads:/app/ResumeUploads
+      - ./apps/streamlit/.streamlit:/app/apps/streamlit/.streamlit:ro
+      - ./runtime:/app/runtime
     ports:
       - "8501:8501"
     depends_on:
       postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Angular UI + web API (invite-only)
+  frontend-v2:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: scraper-frontend-v2
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-scraper}:${POSTGRES_PASSWORD:-scraper_pass}@postgres:5432/${POSTGRES_DB:-scraper_db}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-scraper}:${POSTGRES_PASSWORD:-scraper_pass}@postgres:5432/${POSTGRES_DB:-scraper_db}
+      RESUME_UPLOAD_DIR: /app/runtime/resumes
+      WEB_SECRET_KEY: ${WEB_SECRET_KEY:-}
+      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-http://localhost:8502}
+      # Super admins manage scrape jobs here; changes are pushed to Prefect.
+      PREFECT_API_URL: http://prefect-server:4200/api
+    env_file:
+      - .env
+    volumes:
+      - ./runtime:/app/runtime
+    ports:
+      - "8502:8502"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prefect-server:
         condition: service_healthy
     restart: unless-stopped
 

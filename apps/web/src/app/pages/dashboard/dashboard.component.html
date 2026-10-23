@@ -1,0 +1,66 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="muted">Email records collected by the scraper.</p>
+    </div>
+    <button type="button" class="btn btn-secondary" (click)="load()" [disabled]="loading()">
+      <app-icon name="refresh" /> Refresh
+    </button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ error() }}</div>
+  }
+
+  <section class="kpis" aria-label="Key figures">
+    <div class="card kpi">
+      <span class="kpi-label"><app-icon name="mail" /> Total email records</span>
+      @if (loading() && !stats()) { <span class="skeleton"></span> }
+      @else { <span class="kpi-value">{{ (stats()?.total ?? 0) | number }}</span> }
+    </div>
+    <div class="card kpi">
+      <span class="kpi-label"><app-icon name="tag" /> Total tags</span>
+      @if (loading() && !stats()) { <span class="skeleton"></span> }
+      @else { <span class="kpi-value">{{ (stats()?.tag_count ?? 0) | number }}</span> }
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card" aria-labelledby="by-tag">
+      <div class="card-header"><h2 id="by-tag">Emails by tag</h2></div>
+      @if (tagRows().length) {
+        <app-bar-chart [rows]="tagRows()" label="Emails by tag" />
+      } @else if (!loading()) {
+        <div class="empty"><app-icon name="inbox" [size]="28" /> No tag data available yet.</div>
+      }
+    </section>
+
+    <section class="card" aria-labelledby="tag-counts">
+      <div class="card-header"><h2 id="tag-counts">Tag counts</h2></div>
+      @if (tagRows().length) {
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th scope="col">Tag</th><th scope="col" class="num">Count</th></tr></thead>
+            <tbody>
+              @for (row of tagRows(); track row.label) {
+                <tr><td><span class="badge badge-tag">{{ row.label }}</span></td><td class="num">{{ row.count | number }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else if (!loading()) {
+        <div class="empty"><app-icon name="inbox" [size]="28" /> No tag data available yet.</div>
+      }
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="by-date">
+    <div class="card-header"><h2 id="by-date">Emails by date</h2></div>
+    @if (dateRows().length) {
+      <app-bar-chart [rows]="dateRows()" orientation="vertical" label="Emails by date" />
+    } @else if (!loading()) {
+      <div class="empty"><app-icon name="inbox" [size]="28" /> No date data available yet.</div>
+    }
+  </section>
+</div>

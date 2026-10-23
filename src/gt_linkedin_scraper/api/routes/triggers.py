@@ -1,33 +1,24 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from prefect import get_client
+from prefect.exceptions import ObjectNotFound
 
 from gt_linkedin_scraper.api.dependencies import get_job_repo
 from gt_linkedin_scraper.models.enums import JobStatus
+from gt_linkedin_scraper.scheduler.deployments import run_job_now
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 async def _create_flow_run(job_id: int) -> str:
-    async with get_client() as client:
-        deployment_name = f"scrape-single-job/scrape-job-{job_id}"
-        try:
-            deployment = await client.read_deployment_by_name(deployment_name)
-        except Exception:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"Deployment {deployment_name} not found — "
-                    "ensure the deployer has reconciled"
-                ),
-            )
-        flow_run = await client.create_flow_run_from_deployment(
-            deployment_id=deployment.id,
-            name=f"scrape-job-{job_id}-api",
+    try:
+        return await run_job_now(job_id, run_name=f"scrape-job-{job_id}-api")
+    except ObjectNotFound:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Deployment for job {job_id} not found. Restart the API to reconcile deployments.",
         )
-        return str(flow_run.id)
 
 
 @router.post("/{job_id}")

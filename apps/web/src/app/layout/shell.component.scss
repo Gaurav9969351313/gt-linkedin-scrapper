@@ -1,0 +1,61 @@
+.skip-link {
+  position: absolute; left: 16px; top: -48px; z-index: 10;
+  padding: 8px 12px; background: var(--primary); color: var(--on-primary); border-radius: var(--radius-sm);
+}
+.skip-link:focus { top: 12px; }
+
+.shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+.sidebar {
+  position: sticky; top: 0; height: 100vh;
+  display: flex; flex-direction: column; gap: 24px;
+  padding: 20px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.brand-mark {
+  display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: var(--radius-sm); background: var(--primary); color: var(--on-primary);
+}
+.brand-text { display: grid; line-height: 1.2; }
+.brand-text small { font-size: .75rem; }
+
+nav { display: grid; gap: 4px; }
+.nav-link {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 40px; padding: 0 12px; border-radius: var(--radius-sm);
+  color: var(--fg-muted); text-decoration: none; font-weight: 500; font-size: .9rem;
+  transition: background-color var(--ease), color var(--ease);
+}
+.nav-link:hover { background: var(--surface-2); color: var(--fg); }
+.nav-link.active { background: var(--surface-2); color: var(--fg); box-shadow: inset 3px 0 0 var(--primary); }
+
+.user {
+  margin-top: auto; display: flex; align-items: center; gap: 10px;
+  padding: 12px 8px 0; border-top: 1px solid var(--border);
+}
+.avatar {
+  display: grid; place-items: center; width: 32px; height: 32px; flex: none;
+  border-radius: 50%; background: var(--surface-2); font-weight: 600; font-size: .85rem;
+}
+.user-name { flex: 1; min-width: 0; display: grid; line-height: 1.25; font-size: .9rem; }
+.user-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-name small { font-size: .75rem; }
+
+.content { padding: 32px; max-width: 1200px; width: 100%; outline: none; }
+
+@media (max-width: 768px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: sticky; z-index: 5; height: auto;
+    flex-direction: row; align-items: center; gap: 8px; padding: 10px 16px;
+    border-right: 0; border-bottom: 1px solid var(--border);
+  }
+  .brand-text, .user-name, .avatar { display: none; }
+  .brand { padding: 0; }
+  nav { display: flex; flex: 1; }
+  .user { margin: 0; padding: 0; border: 0; }
+  .content { padding: 20px 16px; }
+}

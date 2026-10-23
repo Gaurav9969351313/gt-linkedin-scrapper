@@ -1,0 +1,98 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Candidates</h1>
+      <p class="muted">Profiles used to send applications.</p>
+    </div>
+    <div class="toolbar">
+      <label class="sr-only" for="tag-filter">Filter by tag</label>
+      <select id="tag-filter" class="select" [(ngModel)]="tagFilter" (ngModelChange)="load()">
+        <option value="">All tags</option>
+        @for (t of tags(); track t.name) { <option [value]="t.name">{{ t.label }}</option> }
+      </select>
+      <button type="button" class="btn btn-primary" (click)="openForm(null)"><app-icon name="plus" /> Add candidate</button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ error() }}</div>
+  }
+
+  <section class="card flush" aria-label="Candidate list">
+    @if (loading()) {
+      <p class="muted pad" role="status">Loading candidates…</p>
+    } @else if (!candidates().length) {
+      <div class="empty">
+        <app-icon name="users" [size]="28" />
+        <span>No candidates found{{ tagFilter ? ' for “' + tagFilter + '”' : '' }}.</span>
+        <button type="button" class="btn btn-secondary" (click)="openForm(null)"><app-icon name="plus" /> Add candidate</button>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Tag</th>
+              <th scope="col">Email</th>
+              <th scope="col">Subscription</th>
+              <th scope="col">Status</th>
+              <th scope="col">Resume</th>
+              <th scope="col">Owner</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of candidates(); track c.id) {
+              <tr>
+                <td>
+                  <div class="name">{{ c.name }}</div>
+                  <div class="muted small">{{ c.number }}</div>
+                </td>
+                <td><span class="badge badge-tag">{{ c.tag }}</span></td>
+                <td>
+                  <div>{{ c.email }}</div>
+                  <div class="muted small subject" [title]="c.email_subject">{{ c.email_subject }}</div>
+                </td>
+                <td>{{ c.subscription }}</td>
+                <td>
+                  @if (c.is_active) { <span class="badge badge-success">Active</span> }
+                  @else { <span class="badge">Inactive</span> }
+                </td>
+                <td>
+                  @if (c.resume) { <span class="resume" [title]="c.resume"><app-icon name="file" /> {{ fileName(c.resume) }}</span> }
+                  @else { <span class="muted">—</span> }
+                </td>
+                <td class="muted small">{{ c.owner_email ?? '—' }}</td>
+                <td class="row-actions">
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="openForm(c)" [attr.aria-label]="'Edit ' + c.name" title="Edit"><app-icon name="pencil" /></button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="confirmDelete(c)" [attr.aria-label]="'Delete ' + c.name" title="Delete"><app-icon name="trash" /></button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
+
+<dialog #formDialog class="modal" aria-labelledby="form-title" (close)="editing.set(null)">
+  <div class="modal-head">
+    <h2 id="form-title">{{ editing() ? 'Edit candidate' : 'Add candidate' }}</h2>
+    <button type="button" class="btn btn-ghost btn-icon" (click)="closeForm()" aria-label="Close"><app-icon name="x" /></button>
+  </div>
+  @if (formError()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ formError() }}</div>
+  }
+  <app-candidate-form [candidate]="editing()" [tags]="tags()" [saving]="saving()" (save)="save($event)" (cancel)="closeForm()" />
+</dialog>
+
+<dialog #deleteDialog class="modal modal-sm" aria-labelledby="del-title" role="alertdialog">
+  <h2 id="del-title">Delete candidate?</h2>
+  <p class="muted">“{{ deleting()?.name }}” will be permanently removed. This can't be undone.</p>
+  <div class="modal-actions">
+    <button type="button" class="btn btn-secondary" (click)="deleteDialog.close()">Cancel</button>
+    <button type="button" class="btn btn-danger" (click)="doDelete()" [disabled]="deleteBusy()">{{ deleteBusy() ? 'Deleting…' : 'Delete' }}</button>
+  </div>
+</dialog>

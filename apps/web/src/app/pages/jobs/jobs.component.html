@@ -1,0 +1,193 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Scraper jobs</h1>
+      <p class="muted">LinkedIn searches the scraper runs on a schedule. Changes apply to the Prefect schedule immediately.</p>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="btn btn-secondary" (click)="load()" [disabled]="loading()"><app-icon name="refresh" /> Refresh</button>
+      <button type="button" class="btn btn-primary" (click)="openForm(null)" [disabled]="!tags().length"><app-icon name="plus" /> New job</button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ error() }}</div>
+  }
+  @if (warning()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ warning() }}</div>
+  }
+  @if (notice()) {
+    <div class="alert alert-success" role="status">{{ notice() }}</div>
+  }
+
+  <section class="card flush" aria-label="Scrape jobs">
+    @if (loading() && !jobs().length) {
+      <p class="muted pad" role="status">Loading jobs…</p>
+    } @else if (!jobs().length) {
+      <div class="empty">
+        <app-icon name="search" [size]="28" /> No scrape jobs yet.
+        <button type="button" class="btn btn-secondary" (click)="openForm(null)" [disabled]="!tags().length">Create the first job</button>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Search</th>
+              <th scope="col">Schedule</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last run</th>
+              <th scope="col" class="num">Emails</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (j of jobs(); track j.id) {
+              <tr [class.held]="j.on_hold">
+                <td class="muted mono">{{ j.id }}</td>
+                <td>
+                  <div class="keyword mono" [title]="j.keyword">{{ j.keyword }}</div>
+                  <div class="meta">
+                    <span class="badge badge-tag">{{ tagLabel(j.tag) }}</span>
+                    <span class="muted small">{{ j.scroll_count }} scrolls</span>
+                  </div>
+                </td>
+                <td>
+                  <div>{{ describeCron(j.cron_expression) }}</div>
+                  <div class="muted small mono">{{ j.cron_expression }}</div>
+                </td>
+                <td>
+                  @switch (j.status) {
+                    @case ('hold') { <span class="badge badge-pending">On hold</span> }
+                    @case ('running') { <span class="badge badge-role admin">Running</span> }
+                    @case ('completed') { <span class="badge badge-success">Completed</span> }
+                    @case ('error') { <span class="badge badge-danger">Error</span> }
+                    @default { <span class="badge">Idle</span> }
+                  }
+                </td>
+                <td class="small">
+                  @if (j.last_run; as r) {
+                    <div>{{ r.started_at | date: 'MMM d, HH:mm' }}</div>
+                    <div class="muted">
+                      {{ r.status }}@if (r.records_count !== null) { · {{ r.records_count }} records }
+                    </div>
+                  } @else {
+                    <span class="muted">Never</span>
+                  }
+                </td>
+                <td class="num">{{ j.email_count | number }}</td>
+                <td class="row-actions">
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="runNow(j)" [disabled]="j.on_hold || busyId() !== null"
+                          [attr.aria-label]="'Run job ' + j.id + ' now'" [title]="j.on_hold ? 'Resume the job to run it' : 'Run now'"><app-icon name="play" /></button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="toggleHold(j)" [disabled]="busyId() !== null"
+                          [attr.aria-label]="(j.on_hold ? 'Resume job ' : 'Hold job ') + j.id" [title]="j.on_hold ? 'Resume schedule' : 'Hold (pause schedule)'">
+                    <app-icon [name]="j.on_hold ? 'refresh' : 'pause'" />
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="showRuns(j)" [attr.aria-label]="'Run history of job ' + j.id" title="Run history"><app-icon name="clock" /></button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="openForm(j)" [attr.aria-label]="'Edit job ' + j.id" title="Edit"><app-icon name="pencil" /></button>
+                  <button type="button" class="btn btn-ghost btn-icon" (click)="confirmDelete(j)" [attr.aria-label]="'Delete job ' + j.id" title="Delete"><app-icon name="trash" /></button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
+
+<!-- create / edit -->
+<dialog #formDialog class="modal" aria-labelledby="job-form-title">
+  <div class="modal-head">
+    <h2 id="job-form-title">{{ editing() ? 'Edit job #' + editing()!.id : 'New scrape job' }}</h2>
+    <button type="button" class="btn btn-ghost btn-icon" (click)="formDialog.close()" aria-label="Close"><app-icon name="x" /></button>
+  </div>
+  @if (formError()) {
+    <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="18" /> {{ formError() }}</div>
+  }
+  <form class="form-grid" (ngSubmit)="save()" #f="ngForm">
+    <div class="field span-all">
+      <label for="job-keyword">LinkedIn search</label>
+      <input id="job-keyword" class="input mono" name="keyword" required maxlength="512" [(ngModel)]="form.keyword"
+             placeholder='"Java" AND "Contract"' aria-describedby="job-keyword-hint" />
+      <span id="job-keyword-hint" class="hint">Searched in LinkedIn posts. Use quotes and AND / OR like LinkedIn search.</span>
+    </div>
+    <div class="field">
+      <label for="job-tag">Tag</label>
+      <select id="job-tag" class="select" name="tag" required [(ngModel)]="form.tag">
+        @for (t of tagOptions(); track t.name) { <option [value]="t.name">{{ t.label }}</option> }
+      </select>
+    </div>
+    <div class="field">
+      <label for="job-scroll">Scroll count</label>
+      <input id="job-scroll" class="input" type="number" name="scroll_count" required min="1" max="100" [(ngModel)]="form.scroll_count"
+             aria-describedby="job-scroll-hint" />
+      <span id="job-scroll-hint" class="hint">How far to scroll the results (1–100). More finds more posts but takes longer.</span>
+    </div>
+    <div class="field">
+      <label for="job-preset">Schedule</label>
+      <select id="job-preset" class="select" (change)="applyPreset($any($event.target).value)">
+        <option value="">Pick a preset…</option>
+        @for (p of presets; track p.cron) { <option [value]="p.cron">{{ p.label }}</option> }
+      </select>
+    </div>
+    <div class="field">
+      <label for="job-cron">Cron expression ({{ timezone }})</label>
+      <input id="job-cron" class="input mono" name="cron_expression" required [(ngModel)]="form.cron_expression" aria-describedby="job-cron-hint" />
+      <span id="job-cron-hint" class="hint">{{ describeCron(form.cron_expression) }} · minute hour day month weekday</span>
+    </div>
+    <div class="modal-actions span-all">
+      <button type="button" class="btn btn-secondary" (click)="formDialog.close()">Cancel</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving() || !f.valid">{{ saving() ? 'Saving…' : editing() ? 'Save changes' : 'Create job' }}</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- run history -->
+<dialog #runsDialog class="modal" aria-labelledby="runs-title">
+  <div class="modal-head">
+    <h2 id="runs-title">Run history · job #{{ runsFor()?.id }}</h2>
+    <button type="button" class="btn btn-ghost btn-icon" (click)="runsDialog.close()" aria-label="Close"><app-icon name="x" /></button>
+  </div>
+  @if (runsLoading()) {
+    <p class="muted" role="status">Loading…</p>
+  } @else if (!runs().length) {
+    <div class="empty"><app-icon name="clock" [size]="28" /> This job hasn't run yet.</div>
+  } @else {
+    <div class="table-wrap runs">
+      <table class="table">
+        <thead>
+          <tr><th scope="col">Started</th><th scope="col">Status</th><th scope="col" class="num">Records</th><th scope="col">Error</th></tr>
+        </thead>
+        <tbody>
+          @for (r of runs(); track r.id) {
+            <tr>
+              <td class="small">{{ r.started_at | date: 'MMM d, y HH:mm:ss' }}</td>
+              <td><span class="badge" [class.badge-success]="r.status === 'completed'" [class.badge-danger]="r.status === 'error'">{{ r.status }}</span></td>
+              <td class="num">{{ r.records_count ?? '—' }}</td>
+              <td class="small error-cell" [title]="r.error_message ?? ''">{{ r.error_message || '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</dialog>
+
+<!-- delete -->
+<dialog #deleteDialog class="modal modal-sm" aria-labelledby="job-del-title" role="alertdialog">
+  <h2 id="job-del-title">Delete job #{{ deleting()?.id }}?</h2>
+  <p class="muted">
+    Its schedule is removed from Prefect.
+    @if (deleting()?.email_count) {
+      <strong class="danger-text">The {{ deleting()?.email_count | number }} email records it found will also be deleted</strong>
+      and candidates won't be emailed at those addresses any more.
+    }
+    To stop it without losing data, put it on hold instead.
+  </p>
+  <div class="modal-actions">
+    <button type="button" class="btn btn-secondary" (click)="deleteDialog.close()">Cancel</button>
+    <button type="button" class="btn btn-danger" (click)="doDelete()" [disabled]="deleteBusy()">{{ deleteBusy() ? 'Deleting…' : 'Delete job' }}</button>
+  </div>
+</dialog>

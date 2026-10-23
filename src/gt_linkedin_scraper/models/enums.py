@@ -9,9 +9,5 @@ class JobStatus(str, enum.Enum):
     HOLD = "hold"
 
 
-class Tag(str, enum.Enum):
-    DEVOPS = "devops"
-    JAVA = "java"
-    QA = "qa"
-    FRESHERS = "freshers"
-    DATA_ENGINEER = "data_engineer"
+# Tags used to be an enum here; they are now rows in the `tags` table
+# (models/tag.py), managed by super admins in the web app.

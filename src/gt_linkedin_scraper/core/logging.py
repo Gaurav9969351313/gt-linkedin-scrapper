@@ -4,9 +4,11 @@ import os
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
+from gt_linkedin_scraper.core.config import settings
+
 
 def setup_logging(log_level: str = "INFO", log_format: str = "json") -> None:
-    log_dir = os.path.join("logs")
+    log_dir = settings.log_dir
     os.makedirs(log_dir, exist_ok=True)
 
     log_file = os.path.join(log_dir, "app.log")

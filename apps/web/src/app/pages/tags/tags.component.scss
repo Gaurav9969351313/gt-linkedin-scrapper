@@ -1,0 +1,9 @@
+.flush { padding: 0; overflow: hidden; }
+.pad { padding: 20px; margin: 0; }
+.name { font-weight: 500; }
+.small { font-size: .8rem; }
+.desc { max-width: 320px; }
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions .btn { min-height: 34px; }
+tr.inactive .name { color: var(--fg-muted); }
+.tag-form { display: grid; gap: 16px; }

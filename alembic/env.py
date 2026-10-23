@@ -14,8 +14,7 @@ if config.config_file_name is not None:
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 from gt_linkedin_scraper.core.database import Base
-from gt_linkedin_scraper.models.job import Job, RunLog
-from gt_linkedin_scraper.models.extraction import EmailRecord, PostRecord
+import gt_linkedin_scraper.models  # noqa: F401  registers every table on Base.metadata
 
 target_metadata = Base.metadata
 

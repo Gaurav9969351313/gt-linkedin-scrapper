@@ -1,0 +1,11 @@
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.flush { padding: 0; overflow: hidden; }
+.pad { padding: 20px; margin: 0; }
+.small { font-size: .8rem; }
+.keyword { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.row-actions { white-space: nowrap; text-align: right; }
+tr.held td:not(.row-actions) { opacity: .65; }
+.runs { max-height: 60vh; overflow: auto; }
+.error-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.danger-text { color: var(--danger); }

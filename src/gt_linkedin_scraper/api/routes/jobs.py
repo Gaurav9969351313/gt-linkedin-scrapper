@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gt_linkedin_scraper.core.database import get_db
 from gt_linkedin_scraper.api.dependencies import get_job_repo
 from gt_linkedin_scraper.models.job import Job
-from gt_linkedin_scraper.models.enums import JobStatus, Tag
+from gt_linkedin_scraper.models.enums import JobStatus
+from gt_linkedin_scraper.scheduler.deployments import delete_job_deployment, sync_job, validate_cron
+from gt_linkedin_scraper.storage.tags import async_active_tag_names
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
@@ -62,11 +64,14 @@ async def get_job(job_id: int, repo=Depends(get_job_repo), db: AsyncSession = De
 
 @router.post("/", response_model=JobResponse)
 async def create_job(job_in: JobCreate, repo=Depends(get_job_repo), db: AsyncSession = Depends(get_db)):
+    if job_in.tag not in await async_active_tag_names(db):
+        raise HTTPException(status_code=422, detail=f"Unknown or inactive tag '{job_in.tag}'")
     try:
-        tag = Tag(job_in.tag)
-    except ValueError:
-        tag = Tag.JAVA
-    job = await repo.create(job_in.keyword, job_in.scroll_count, tag.value, job_in.cron)
+        validate_cron(job_in.cron)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    job = await repo.create(job_in.keyword, job_in.scroll_count, job_in.tag, job_in.cron)
+    await sync_job(job)
     return JobResponse.model_validate(job)
 
 
@@ -75,6 +80,7 @@ async def delete_job(job_id: int, repo=Depends(get_job_repo), db: AsyncSession =
     ok = await repo.delete(job_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Job not found")
+    await delete_job_deployment(job_id)
     return {"detail": "deleted"}
 
 
@@ -83,6 +89,7 @@ async def hold_job(job_id: int, repo=Depends(get_job_repo), db: AsyncSession = D
     job = await repo.update_status(job_id, JobStatus.HOLD)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    await sync_job(job)  # pauses the schedule
     return {"detail": "held"}
 
 
@@ -91,6 +98,7 @@ async def resume_job(job_id: int, repo=Depends(get_job_repo), db: AsyncSession =
     job = await repo.update_status(job_id, JobStatus.IDLE)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    await sync_job(job)  # resumes the schedule
     return {"detail": "resumed"}
 
 

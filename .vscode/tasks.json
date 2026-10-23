@@ -42,7 +42,7 @@
       "type": "shell",
       "command": "${workspaceFolder}/.venv/Scripts/python.exe",
       "args": [
-        "run_job_directly.py"
+        "scripts/run_job_directly.py"
       ],
       "group": "build",
       "presentation": {

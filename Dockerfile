@@ -54,6 +54,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY config/ ./config/
 COPY scripts/ ./scripts/
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 
 # ---------------------------------------------------------
 # Install Playwright Chromium
@@ -70,7 +72,7 @@ RUN playwright install --list && \
 # ---------------------------------------------------------
 # Runtime directories
 # ---------------------------------------------------------
-RUN mkdir -p data logs extract
+RUN mkdir -p runtime/data runtime/logs runtime/extract runtime/debug runtime/resumes
 
 EXPOSE 8000
 
